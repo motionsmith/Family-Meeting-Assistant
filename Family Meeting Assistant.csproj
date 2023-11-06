@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net7.0</TargetFramework>
+    <RootNamespace>Family_Meeting_Assistant</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(RunConfiguration)' == 'Default' ">
+    <StartAction>Project</StartAction>
+    <ExternalConsole>false</ExternalConsole>
+    <EnvironmentVariables>
+      <Variable name="SPEECH_KEY" value="721f875bbebb42c1b21e7dc45a8c50fe" />
+      <Variable name="SPEECH_REGION" value="westus" />
+      <Variable name="OPENAI_KEY" value="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" />
+      <Variable name="OPENAI_ORG" value="org-HwwgpJdCV6qlH6ylUkvCsaIT" />
+    </EnvironmentVariables>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.32.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>
