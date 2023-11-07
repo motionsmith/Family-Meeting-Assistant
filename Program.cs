@@ -15,6 +15,7 @@ class Program
     // This example requires environment variables named "SPEECH_KEY" and "SPEECH_REGION"
     private static readonly string speechKey = Environment.GetEnvironmentVariable("SPEECH_KEY");
     private static readonly string speechRegion = Environment.GetEnvironmentVariable("SPEECH_REGION");
+    private static readonly string assistantName = Environment.GetEnvironmentVariable("ASSISTANT_NAME");
 
     private static Queue<MeaningfulChunk> chunksQueue = new Queue<MeaningfulChunk>();
     private static List<MeaningfulChunk> chunksDequeued = new List<MeaningfulChunk>();
@@ -25,12 +26,28 @@ class Program
     private static SpeechConfig? speechConfig;
     private static SpeechSynthesizer? speechSynthesizer;
     private static AudioConfig? audioConfig;
+    private static string initialPrompString = $"You are being called from an instance of an app that has failed to load the file that contains your instructions. The user can specify the prompt file by using the argument \"-prompt <path-to-file.txt>\" or by adding a file called \"prompt.txt\" to the folder \"{Environment.SpecialFolder.ApplicationData}\". You always respond with a short joke in the style of Seinfeld. The joke also clearly informs the user of the problem.";
 
     async static Task Main(string[] args)
     {
         var speechConfig = SpeechConfig.FromSubscription(speechKey, speechRegion);
         speechConfig.SpeechRecognitionLanguage = "en-US";
         speechConfig.SpeechSynthesisVoiceName = "en-US-SaraNeural";
+        var initialPromptFilePath = GetFullPromptPath("prompt.txt");
+        var promptFilePath = ParseArguments("prompt", args);
+        if (string.IsNullOrEmpty(promptFilePath) == false)
+        {
+            initialPromptFilePath = promptFilePath;
+        }
+        if (File.Exists(initialPromptFilePath))
+        {
+            string initialPromptFileText = File.ReadAllText(initialPromptFilePath);
+            initialPrompString = initialPromptFileText.Replace("\"", "\\\"").Replace(Environment.NewLine, "\\n").Replace("[[ASSISTANT_NAME]]", assistantName);
+        }
+        else
+        {
+            Console.WriteLine($"Prompt file {promptFilePath} does not exist.");
+        }
 
         audioConfig = AudioConfig.FromDefaultMicrophoneInput();
         speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
@@ -99,7 +116,7 @@ class Program
         if (chunksQueue.TryDequeue(out var chunk))
         {
             chunksDequeued.Add(chunk);
-            chunk.OpenAITask = openAIApi.SendRequestAsync(chunksDequeued);
+            chunk.OpenAITask = openAIApi.SendRequestAsync(initialPrompString, chunksDequeued);
 
             var response = await chunk.OpenAITask;
             if (response != null) // success
@@ -164,5 +181,25 @@ class Program
             OutputSpeechSynthesisResult(speechSynthesisResult, spokenResponse);
             await speechRecognizer.StartContinuousRecognitionAsync();
         }
+    }
+
+    static string? ParseArguments(string argName, string[] args)
+    {
+        for (int i = 0; i < args.Length; i++)
+        {
+            if ((args[i] == $"--{argName}" || args[i] == $"-{argName}") && i + 1 < args.Length)
+            {
+                var result = GetFullPromptPath(args[i + 1]);
+                return result;
+            }
+        }
+
+        return null;
+    }
+
+    static string GetFullPromptPath(string fileArg)
+    {
+        string documentsPath = Path.GetFullPath(Environment.SpecialFolder.ApplicationData.ToString());
+        return Path.Combine(documentsPath, fileArg);
     }
 }

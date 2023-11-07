@@ -1,0 +1,6 @@
+﻿export SPEECH_KEY=721f875bbebb42c1b21e7dc45a8c50fe
+export SPEECH_REGION=westus
+export OPENAI_KEY=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
+export OPENAI_ORG=org-HwwgpJdCV6qlH6ylUkvCsaIT
+export MODEL_ID=gpt-4-1106-preview
+export ASSISTANT_NAME=Walter

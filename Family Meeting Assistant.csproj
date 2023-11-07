@@ -10,7 +10,7 @@
 
   <PropertyGroup Condition=" '$(RunConfiguration)' == 'Default' ">
     <StartAction>Project</StartAction>
-    <ExternalConsole>false</ExternalConsole>
+    <ExternalConsole>true</ExternalConsole>
     <EnvironmentVariables>
       <Variable name="SPEECH_KEY" value="721f875bbebb42c1b21e7dc45a8c50fe" />
       <Variable name="SPEECH_REGION" value="westus" />
