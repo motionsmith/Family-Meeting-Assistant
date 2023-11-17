@@ -137,15 +137,17 @@ public class OpenAIApi
         }
     }
 
-    public List<Message> CreateMessages(string initialPrompString, IEnumerable<MeaningfulChunk> chunks)
+    private List<Message> CreateMessages(string initialPrompString, IEnumerable<MeaningfulChunk> chunks)
     {
-        var messages = new List<Message>();
-        messages.Add(new Message
+        var messages = new List<Message>
         {
-            Role = Role.System,
-            Content = initialPrompString
-        });
-
+            new Message
+            {
+                Role = Role.System,
+                Content = initialPrompString
+            }
+        };
+        
         foreach (var chunk in chunks)
         {
             // Create a Message for the speech recognition result

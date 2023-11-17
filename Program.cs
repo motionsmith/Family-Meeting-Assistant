@@ -47,7 +47,6 @@ class Program
         {
             string initialPromptFileText = File.ReadAllText(initialPromptFilePath);
             initialPrompString = initialPromptFileText.Replace("\"", "\\\"").Replace(Environment.NewLine, "\\n").Replace("[[ASSISTANT_NAME]]", assistantName).Replace("[[NOW]]", DateTime.Now.ToString());
-            initialPrompString += $"\nFamily task and chore list:\n{ChoreManager.PromptList}\n";
         }
         else
         {
@@ -118,10 +117,12 @@ class Program
 
     private static async Task TryProcessNextChunk()
     {
+        var initialSystemPrompt = initialPrompString;
+        initialSystemPrompt += $"\nFamily task and chore list:\n{ChoreManager.PromptList}\n";
         if (chunksQueue.TryDequeue(out var chunk))
         {
             chunksDequeued.Add(chunk);
-            chunk.OpenAITask = openAIApi.SendRequestAsync(initialPrompString, chunksDequeued);
+            chunk.OpenAITask = openAIApi.SendRequestAsync(initialSystemPrompt, chunksDequeued);
 
             var response = await chunk.OpenAITask;
             chunk.ToolCallTasks = HandleToolCall(chunk);
