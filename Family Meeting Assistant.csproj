@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <PropertyGroup Condition=" '$(RunConfiguration)' == 'Default' ">
+  <PropertyGroup>
     <StartAction>Project</StartAction>
     <ExternalConsole>true</ExternalConsole>
     <EnvironmentVariables>
@@ -16,6 +16,9 @@
       <Variable name="SPEECH_REGION" value="westus" />
       <Variable name="OPENAI_KEY" value="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" />
       <Variable name="OPENAI_ORG" value="org-HwwgpJdCV6qlH6ylUkvCsaIT" />
+      <Variable name="MODEL_ID" value="gpt-4-1106-preview" />
+      <Variable name="ASSISTANT_NAME" value="Walter" />
+export ASSISTANT_NAME=Walter"
     </EnvironmentVariables>
   </PropertyGroup>
   <ItemGroup>

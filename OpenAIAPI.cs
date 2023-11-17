@@ -13,6 +13,71 @@ public class OpenAIApi
     private readonly string openAIOrg = Environment.GetEnvironmentVariable("OPENAI_ORG");
     private readonly string modelId = Environment.GetEnvironmentVariable("MODEL_ID");
     private readonly string assistantName = Environment.GetEnvironmentVariable("ASSISTANT_NAME");
+    private readonly List<Tool> _tools = new List<Tool> {
+            new Tool {
+                Function = new ToolFunction {
+                    Name = "file_task",
+                    Description = "Adds a task to the family task list.",
+                    Parameters = new ToolFunctionParameters {
+                        Properties = new Dictionary<string, ToolFunctionParameterProperty> {
+                            {
+                                "title", new ToolFunctionParameterProperty
+                                {
+                                    Type = "string",
+                                    Description = "A short description that helps the family members remember what needs to be done to complete this task."
+                                }
+                            }
+                        },
+                        Required = new List<string> { "title" }
+                    }
+                }
+            },
+            new Tool {
+                Function = new ToolFunction {
+                    Name = "complete_task",
+                    Description = "Removes a task from the family task list.",
+                    Parameters = new ToolFunctionParameters {
+                        Properties = new Dictionary<string, ToolFunctionParameterProperty> {
+                            {
+                                "title", new ToolFunctionParameterProperty
+                                {
+                                    Type = "string",
+                                    Description = "The title of the task to be removed."
+                                }
+                            }
+                        },
+                        Required = new List<string> { "title" }
+                    }
+                }
+            },
+            new Tool {
+                Function = new ToolFunction
+                {
+                    Name = "speak",
+                    Description = "Causes the LLM to speak using text-to-speech though the user's speakers.",
+                    Parameters = new ToolFunctionParameters
+                    {
+                        Properties = new Dictionary<string, ToolFunctionParameterProperty> {
+                            {
+                                "text", new ToolFunctionParameterProperty
+                                {
+                                    Type = "string",
+                                    Description = "The text to be spoken."
+                                }
+                            }
+                        },
+                        Required = new List<string> { "text" }
+                    }
+                }
+            },
+            new Tool {
+                Function = new ToolFunction
+                {
+                    Name = "do_nothing",
+                    Description = "Call this function when there are no actions to be taken."
+                }
+            }
+        };
 
     public async Task<OpenAIApiResponse> SendRequestAsync(string initialPrompString, IEnumerable<MeaningfulChunk> chunks)
     {
@@ -20,7 +85,12 @@ public class OpenAIApi
         {
             Model = modelId,
             Messages = CreateMessages(initialPrompString, chunks),
-            Temperature = 0.7
+            Temperature = 0.7,
+            Tools = _tools,
+            ResponseFormat = new ResponseFormat
+            {
+                Type = "json_object"
+            }
         };
 
         var requestJson = JsonConvert.SerializeObject(next);
@@ -42,16 +112,20 @@ public class OpenAIApi
         {
             var response = await httpClient.SendAsync(request);
             if (response.IsSuccessStatusCode == false)
-                Console.WriteLine($"Response - {response.StatusCode} {response.ReasonPhrase}");
+            {
+                var failureResponseContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Response - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
+            }
+
             response.EnsureSuccessStatusCode();
             var responseContent = await response.Content.ReadAsStringAsync();
             var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
-            Console.WriteLine($"[{assistantName}] {responseContentObject.Choices[0].Message.Content}");
+            //Console.WriteLine(responseContent);
             return responseContentObject;
         }
-        catch
+        catch (Exception ex)
         {
-            Console.WriteLine($"OpenAI request failed: {requestJson}");
+            Console.WriteLine($"OpenAI request failed: {ex} {ex.Message} {requestJson}");
             return null;
         }
     }
@@ -81,16 +155,22 @@ public class OpenAIApi
             // Create a Message for the OpenAI API response
             if (chunk.OpenAITask != null && chunk.OpenAITask.Result != null)
             {
-                var assistantMessage = new Message
-                {
-                    Content = chunk.OpenAITask.Result.Choices[0].Message.Content,
-                    Role = Role.Assistant
-                };
-                messages.Add(assistantMessage);
+                var aiResponseMessage = chunk.OpenAITask.Result.Choices[0].Message;
+                messages.Add(aiResponseMessage);
+
+                // According to OpenAI service: "An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'."
+                if (chunk.ToolCallTasks != null && chunk.ToolCallTasks.Result != null)
+                    messages.AddRange(chunk.ToolCallTasks.Result);
+
             }
         }
 
         return messages;
+    }
+
+    private Tool GetToolByName(string toolName)
+    {
+        return _tools.First(tool => tool.Function.Name == toolName);
     }
 }
 
@@ -129,17 +209,20 @@ public class Usage
 
 public class Message
 {
-    [JsonProperty("content", Required = Required.Always)]
+    [JsonProperty("content", NullValueHandling = NullValueHandling.Ignore)]
     public string Content { get; set; }  // Can be null according to documentation
 
-    /*[JsonProperty("name", NullValueHandling = NullValueHandling.Ignore)]
-    [MaxLength(64, ErrorMessage = "Name length can't exceed 64 characters.")]
-    [RegularExpression(@"^[a-zA-Z0-9_]*$", ErrorMessage = "Name can only contain a-z, A-Z, 0-9, and underscores.")]
-    public string Name { get; set; }  // Optional field*/
+    [JsonProperty("tool_calls", NullValueHandling = NullValueHandling.Ignore)]
+    public List<ToolCall>? ToolCalls { get; set; }
+
+    [JsonProperty("tool_call_id", NullValueHandling = NullValueHandling.Ignore)]
+    public string? ToolCallId { get; set; }
 
     [JsonProperty("role", Required = Required.Always)]
     [EnumDataType(typeof(Role), ErrorMessage = "Invalid role.")]
     public Role Role { get; set; }  // Enum type to enforce valid values
+
+
 }
 
 [JsonConverter(typeof(StringEnumConverter))]
@@ -151,10 +234,20 @@ public enum Role
     User,
     [EnumMember(Value = "assistant")]
     Assistant,
-    [EnumMember(Value = "function")]
-    Function
+    [EnumMember(Value = "tool")]
+    Tool
 }
 
+[JsonConverter(typeof(StringEnumConverter))]
+public enum FinishReason
+{
+    [EnumMember(Value = "tool_calls")]
+    ToolCalls,
+    [EnumMember(Value = "length")]
+    Length,
+    [EnumMember(Value = "stop")]
+    Stop
+}
 
 public class Choice
 {
@@ -162,7 +255,7 @@ public class Choice
     public Message Message { get; set; }
 
     [JsonProperty("finish_reason")]
-    public string FinishReason { get; set; }
+    public FinishReason FinishReason { get; set; }
 
     [JsonProperty("index")]
     public int Index { get; set; }
@@ -179,11 +272,11 @@ public class ChatCompletionRequest
     [JsonProperty("frequency_penalty", NullValueHandling = NullValueHandling.Ignore)]
     public double? FrequencyPenalty { get; set; }
 
-    [JsonProperty("function_call", NullValueHandling = NullValueHandling.Ignore)]
-    public dynamic FunctionCall { get; set; }  // Could be string or object
+    [JsonProperty("tool_choice", NullValueHandling = NullValueHandling.Ignore)]
+    public List<Tool>? ToolChoice { get; set; }
 
-    [JsonProperty("functions", NullValueHandling = NullValueHandling.Ignore)]
-    public List<string> Functions { get; set; } = new List<string>();
+    [JsonProperty("tools", NullValueHandling = NullValueHandling.Ignore)]
+    public List<Tool>? Tools { get; set; }
 
     [JsonProperty("logit_bias", NullValueHandling = NullValueHandling.Ignore)]
     public Dictionary<string, double> LogitBias { get; set; } = new Dictionary<string, double>();
@@ -196,6 +289,9 @@ public class ChatCompletionRequest
 
     [JsonProperty("presence_penalty", NullValueHandling = NullValueHandling.Ignore)]
     public double? PresencePenalty { get; set; }
+
+    [JsonProperty("response_format", NullValueHandling = NullValueHandling.Ignore)]
+    public ResponseFormat? ResponseFormat { get; set; }
 
     [JsonProperty("stop", NullValueHandling = NullValueHandling.Ignore)]
     public dynamic Stop { get; set; }  // Could be string, array or null
@@ -212,8 +308,92 @@ public class ChatCompletionRequest
     [JsonProperty("user", NullValueHandling = NullValueHandling.Ignore)]
     public string User { get; set; }
 
-    public bool ShouldSerializeFunctions()
+    public bool ShouldSerializeTools()
     {
-        return Functions != null && Functions.Count > 0;
+        return Tools != null && Tools.Count > 0;
     }
+
+    public bool ShouldSerializeToolChoice()
+    {
+        return ToolChoice != null && ToolChoice.Count > 0;
+    }
+}
+
+public class ToolFunctionParameterProperty
+{
+    [JsonProperty("type", Required = Required.Always)]
+    public string Type { get; set; }
+
+    [JsonProperty("description", Required = Required.Always)]
+    public string Description { get; set; }
+
+    [JsonProperty("enum", NullValueHandling = NullValueHandling.Ignore)]
+    public List<string> Enum { get; set; }
+}
+
+public class ToolFunctionParameters
+{
+    [JsonProperty("type")]
+    public string Type = "object";
+
+    [JsonProperty("properties")]
+    public Dictionary<string, ToolFunctionParameterProperty> Properties { get; set; } = new Dictionary<string, ToolFunctionParameterProperty>();
+
+    [JsonProperty("required", NullValueHandling = NullValueHandling.Ignore)]
+    public List<string> Required { get; set; }
+}
+
+public class ToolFunction
+{
+    [JsonProperty("name")]
+    public string Name { get; set; }
+
+    [JsonProperty("description")]
+    public string Description { get; set; }
+
+    [JsonProperty("parameters", Required = Required.Default)]
+    public ToolFunctionParameters Parameters { get; set; } = new ToolFunctionParameters();
+}
+
+public class ToolCallFunction
+{
+    [JsonProperty("name", Required = Required.Always)]
+    public string Name { get; set; }
+
+    [JsonProperty("arguments", Required = Required.Always)]
+    public string Arguments { get; set; }
+
+    public override string ToString()
+    {
+        return $"{Name}({Arguments})";
+    }
+}
+
+public class Tool
+{
+    [JsonProperty("type")]
+    public string Type = "function";
+
+    [JsonProperty("function")]
+    public ToolFunction Function { get; set; }
+
+    public Func<string>? Log { get; set; }
+}
+
+public class ToolCall
+{
+    [JsonProperty("id", Required = Required.Always)]
+    public string Id { get; set; }
+
+    [JsonProperty("type", Required = Required.Always)]
+    public string Type = "function";
+
+    [JsonProperty("function", Required = Required.Always)]
+    public ToolCallFunction Function { get; set; }
+}
+
+public class ResponseFormat
+{
+    [JsonProperty("type", Required = Required.Always)]
+    public string Type { get; set; }
 }

@@ -9,6 +9,8 @@ using Newtonsoft.Json.Converters;
 using System.Runtime.Serialization;
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
+using Newtonsoft.Json.Linq;
+using System.Diagnostics;
 
 class Program
 {
@@ -34,10 +36,11 @@ class Program
         speechConfig.SpeechRecognitionLanguage = "en-US";
         speechConfig.SpeechSynthesisVoiceName = "en-US-SaraNeural";
         var initialPromptFilePath = GetFullPromptPath("prompt.txt");
-        var promptFilePath = ParseArguments("prompt", args);
-        if (string.IsNullOrEmpty(promptFilePath) == false)
+        var promptArg = ParseArguments("prompt", args);
+        if (string.IsNullOrEmpty(promptArg) == false)
         {
-            initialPromptFilePath = promptFilePath;
+            var promptArgFilePath = GetFullPromptPath(promptArg);
+            initialPromptFilePath = promptArgFilePath;
         }
         if (File.Exists(initialPromptFilePath))
         {
@@ -46,7 +49,7 @@ class Program
         }
         else
         {
-            Console.WriteLine($"Prompt file {promptFilePath} does not exist.");
+            Console.WriteLine($"Prompt file {initialPromptFilePath} does not exist.");
         }
 
         audioConfig = AudioConfig.FromDefaultMicrophoneInput();
@@ -119,10 +122,8 @@ class Program
             chunk.OpenAITask = openAIApi.SendRequestAsync(initialPrompString, chunksDequeued);
 
             var response = await chunk.OpenAITask;
-            if (response != null) // success
-            {
-                await HandleHashtags(response);
-            }
+            chunk.ToolCallTasks = HandleToolCall(chunk);
+            await chunk.ToolCallTasks;
         }
     }
 
@@ -164,6 +165,78 @@ class Program
         }
     }
 
+    private static async Task<IEnumerable<Message>?> HandleToolCall(MeaningfulChunk chunk)
+    {
+        var aiResponseMessage = chunk.OpenAITask.Result.Choices[0].Message;
+        if (aiResponseMessage.ToolCalls == null)
+        {
+            return null;
+        }
+
+        Console.WriteLine($"[{assistantName}] {aiResponseMessage.ToolCalls[0].Function}");
+        var toolMessages = new List<Message>();
+        foreach (var call in aiResponseMessage.ToolCalls)
+        {
+            var functionName = call.Function.Name;
+            var arguments = call.Function.Arguments;
+            var argsJObj = JObject.Parse(arguments);
+
+            switch (functionName)
+            {
+                case "file_task":
+                    var fileTaskContent = $"Filed a task: {argsJObj["title"]}";
+                    Console.WriteLine($"[Tool] {fileTaskContent}");
+                    toolMessages.Add(new Message
+                    {
+                        Content = fileTaskContent,
+                        Role = Role.Tool,
+                        ToolCallId = call.Id
+                    });
+                    break;
+                case "complete_task":
+                    var completeTaskContent = $"Completed the task to {argsJObj["title"]}";
+                    Console.WriteLine($"[Tool] {completeTaskContent}");
+                    toolMessages.Add(new Message
+                    {
+                        Content = completeTaskContent,
+                        Role = Role.Tool,
+                        ToolCallId = call.Id
+                    });
+                    break;
+                case "speak":
+                    var textToSpeak = argsJObj["text"]?.ToString();
+                    var speakContent = $"Spoke {textToSpeak}";
+                    await speechRecognizer.StopContinuousRecognitionAsync();
+                    var speechSynthesisResult = await speechSynthesizer.SpeakTextAsync(textToSpeak);
+                    OutputSpeechSynthesisResult(speechSynthesisResult, textToSpeak);
+                    await speechRecognizer.StartContinuousRecognitionAsync();
+                    Console.WriteLine($"[Tool] {speakContent}");
+                    toolMessages.Add(new Message
+                    {
+                        Content = speakContent,
+                        Role = Role.Tool,
+                        ToolCallId = call.Id
+                    });
+                    break;
+                case "do_nothing":
+                    var doNothingContent = $"Mhm";
+                    Console.WriteLine($"[Tool] {doNothingContent}");
+                    toolMessages.Add(new Message
+                    {
+                        Content = doNothingContent,
+                        Role = Role.Tool,
+                        ToolCallId = call.Id
+                    });
+                    break;
+                default:
+                    // Handle unknown function
+                    Console.WriteLine($"Can't call Unknown tool {functionName}");
+                    break;
+            }
+        }
+        return toolMessages;
+    }
+
     private static async Task HandleHashtags(OpenAIApiResponse openAiResponse)
     {
         var responseContent = openAiResponse.Choices[0].Message.Content;
@@ -189,17 +262,16 @@ class Program
         {
             if ((args[i] == $"--{argName}" || args[i] == $"-{argName}") && i + 1 < args.Length)
             {
-                var result = GetFullPromptPath(args[i + 1]);
-                return result;
+                return args[i + 1];
             }
         }
-
         return null;
     }
 
     static string GetFullPromptPath(string fileArg)
     {
-        string documentsPath = Path.GetFullPath(Environment.SpecialFolder.ApplicationData.ToString());
+        var appDataDirPath = Environment.SpecialFolder.ApplicationData.ToString();
+        string documentsPath = Path.GetFullPath(appDataDirPath);
         return Path.Combine(documentsPath, fileArg);
     }
 }
