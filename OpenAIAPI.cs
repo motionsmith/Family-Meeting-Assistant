@@ -32,13 +32,13 @@ public class OpenAIApi
                     }
                 }
             },
-            new Tool {
+            /*new Tool {
                 Function = new ToolFunction
                 {
                     Name = "list_tasks",
                     Description = "Lists the tasks in the family task list."
                 }
-            },
+            },*/
             new Tool {
                 Function = new ToolFunction {
                     Name = "complete_task",

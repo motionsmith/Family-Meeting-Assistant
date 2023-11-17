@@ -46,8 +46,8 @@ class Program
         if (File.Exists(initialPromptFilePath))
         {
             string initialPromptFileText = File.ReadAllText(initialPromptFilePath);
-            initialPrompString = initialPromptFileText.Replace("\"", "\\\"").Replace(Environment.NewLine, "\\n").Replace("[[ASSISTANT_NAME]]", assistantName);
-            initialPrompString += $"\n{ChoreManager.PromptList}\n";
+            initialPrompString = initialPromptFileText.Replace("\"", "\\\"").Replace(Environment.NewLine, "\\n").Replace("[[ASSISTANT_NAME]]", assistantName).Replace("[[NOW]]", DateTime.Now.ToString());
+            initialPrompString += $"\nFamily task and chore list:\n{ChoreManager.PromptList}\n";
         }
         else
         {
@@ -128,7 +128,6 @@ class Program
             await chunk.ToolCallTasks;
         }
     }
-
 
     public static async Task StartProcessingLoop(CancellationToken cancellationToken)
     {

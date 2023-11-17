@@ -16,6 +16,7 @@ public static class ChoreManager
         {
             Chores.Remove(chore);
         }
+        SaveChores();
     }
 
     private static void SaveChores()
