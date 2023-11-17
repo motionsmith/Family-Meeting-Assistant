@@ -33,6 +33,13 @@ public class OpenAIApi
                 }
             },
             new Tool {
+                Function = new ToolFunction
+                {
+                    Name = "list_tasks",
+                    Description = "Lists the tasks in the family task list."
+                }
+            },
+            new Tool {
                 Function = new ToolFunction {
                     Name = "complete_task",
                     Description = "Removes a task from the family task list.",

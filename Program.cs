@@ -32,6 +32,7 @@ class Program
 
     async static Task Main(string[] args)
     {
+        ChoreManager.LoadChores();
         var speechConfig = SpeechConfig.FromSubscription(speechKey, speechRegion);
         speechConfig.SpeechRecognitionLanguage = "en-US";
         speechConfig.SpeechSynthesisVoiceName = "en-US-SaraNeural";
@@ -46,6 +47,7 @@ class Program
         {
             string initialPromptFileText = File.ReadAllText(initialPromptFilePath);
             initialPrompString = initialPromptFileText.Replace("\"", "\\\"").Replace(Environment.NewLine, "\\n").Replace("[[ASSISTANT_NAME]]", assistantName);
+            initialPrompString += $"\n{ChoreManager.PromptList}\n";
         }
         else
         {
@@ -184,7 +186,9 @@ class Program
             switch (functionName)
             {
                 case "file_task":
-                    var fileTaskContent = $"Filed a task: {argsJObj["title"]}";
+                    var newChore = new Chore(argsJObj["title"].ToString());
+                    ChoreManager.Add(newChore);
+                    var fileTaskContent = $"Filed a task: {newChore.Name}";
                     Console.WriteLine($"[Tool] {fileTaskContent}");
                     toolMessages.Add(new Message
                     {
@@ -194,11 +198,24 @@ class Program
                     });
                     break;
                 case "complete_task":
-                    var completeTaskContent = $"Completed the task to {argsJObj["title"]}";
+                    var choreName = argsJObj["title"].ToString();
+                    ChoreManager.Complete(choreName);
+                    var completeTaskContent = $"Completed the task to {choreName}";
                     Console.WriteLine($"[Tool] {completeTaskContent}");
                     toolMessages.Add(new Message
                     {
                         Content = completeTaskContent,
+                        Role = Role.Tool,
+                        ToolCallId = call.Id
+                    });
+                    break;
+                case "list_tasks":
+                    var choreList = ChoreManager.PromptList;
+                    var listChoresContent = $"Chores:\n{ choreList }";
+                    Console.WriteLine($"[Tool] {listChoresContent}");
+                    toolMessages.Add(new Message
+                    {
+                        Content = listChoresContent,
                         Role = Role.Tool,
                         ToolCallId = call.Id
                     });
