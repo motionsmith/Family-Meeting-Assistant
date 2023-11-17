@@ -68,12 +68,7 @@ class Program
             if (e.Result.Reason == ResultReason.RecognizedSpeech)
             {
                 Console.WriteLine($"RECOGNIZED: {e.Result.Text}");
-                var chunk = new MeaningfulChunk
-                {
-                    RecognitionEvent = e,
-                    OpenAITask = null  // Task will be assigned when ready to process with OpenAI
-                };
-
+                var chunk = new MeaningfulChunk(e);
                 chunksQueue.Enqueue(chunk);
                 _ = TryProcessNextChunk();
             }
@@ -118,7 +113,8 @@ class Program
     private static async Task TryProcessNextChunk()
     {
         var initialSystemPrompt = initialPrompString;
-        initialSystemPrompt += $"\nFamily task and chore list:\n{ChoreManager.PromptList}\n";
+        var choresPrompt = $"\nFamily task and chore list:\n{ChoreManager.PromptList}\n";
+        initialSystemPrompt += choresPrompt;
         if (chunksQueue.TryDequeue(out var chunk))
         {
             chunksDequeued.Add(chunk);
@@ -186,9 +182,11 @@ class Program
             switch (functionName)
             {
                 case "file_task":
-                    var newChore = new Chore(argsJObj["title"].ToString());
+                    var newChoreName = argsJObj["title"].ToString();
+                    var dueDt = DateTime.Parse(argsJObj["due"].ToString());
+                    var newChore = new Chore(newChoreName, dueDt);
                     ChoreManager.Add(newChore);
-                    var fileTaskContent = $"Filed a task: {newChore.Name}";
+                    var fileTaskContent = $"Filed a task: {newChoreName}";
                     Console.WriteLine($"[Tool] {fileTaskContent}");
                     toolMessages.Add(new Message
                     {
@@ -198,9 +196,9 @@ class Program
                     });
                     break;
                 case "complete_task":
-                    var choreName = argsJObj["title"].ToString();
-                    ChoreManager.Complete(choreName);
-                    var completeTaskContent = $"Completed the task to {choreName}";
+                    var completedChoreName = argsJObj["title"].ToString();
+                    ChoreManager.Complete(completedChoreName);
+                    var completeTaskContent = $"Completed the task to {completedChoreName}";
                     Console.WriteLine($"[Tool] {completeTaskContent}");
                     toolMessages.Add(new Message
                     {

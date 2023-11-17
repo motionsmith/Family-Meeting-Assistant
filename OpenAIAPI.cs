@@ -26,19 +26,26 @@ public class OpenAIApi
                                     Type = "string",
                                     Description = "A short description that helps the family members remember what needs to be done to complete this task."
                                 }
+                            },
+                            {
+                                "due", new ToolFunctionParameterProperty
+                                {
+                                    Type = "string",
+                                    Description = "The date that the task is due, in the format MM/DD/YYYY."
+                                }
                             }
                         },
                         Required = new List<string> { "title" }
                     }
                 }
             },
-            /*new Tool {
+            new Tool {
                 Function = new ToolFunction
                 {
                     Name = "list_tasks",
                     Description = "Lists the tasks in the family task list."
                 }
-            },*/
+            },
             new Tool {
                 Function = new ToolFunction {
                     Name = "complete_task",
@@ -147,7 +154,7 @@ public class OpenAIApi
                 Content = initialPrompString
             }
         };
-        
+
         foreach (var chunk in chunks)
         {
             // Create a Message for the speech recognition result
@@ -155,7 +162,7 @@ public class OpenAIApi
             {
                 var userMessage = new Message
                 {
-                    Content = chunk.RecognitionEvent.Result.Text,
+                    Content = $"{chunk.RecognitionTimestamp.ToShortTimeString()}: {chunk.RecognitionEvent.Result.Text}",
                     Role = Role.User
                 };
                 messages.Add(userMessage);
