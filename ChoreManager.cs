@@ -1,8 +1,11 @@
 using System;
-public static class ChoreManager
+using Newtonsoft.Json.Linq;
+
+public class ChoreManager : IMessageProvider
 {
-    public static List<Chore> Chores { get; } = new List<Chore>();
-    public static object PromptList => string.Join('\n', Chores.Select(chore => {
+    public List<Chore> Chores { get; } = new List<Chore>();
+    public object PromptList => string.Join('\n', Chores.Select(chore =>
+    {
         var s = chore.Name;
         if (chore.DueDate.HasValue)
         {
@@ -11,42 +14,103 @@ public static class ChoreManager
         return s;
     }));
 
-    public static void Add(Chore chore)
+    public IList<Message> Messages { get; } = new List<Message>();
+
+    public event Action<Message>? MessageArrived;
+
+    public ChoreManager()
     {
-        Chores.Add(chore);
-        SaveChores();
+
     }
 
-    public static void Complete(string choreName)
+    public void File(ToolCall toolCall)
     {
-        var chore = Chores.FirstOrDefault(chore => chore.Name == choreName);
-        if (chore != null)
+        var argsJObj = JObject.Parse(toolCall.Function.Arguments);
+        var newChoreName = argsJObj["title"].ToString();
+        DateTime? dueDt = null;
+        if (argsJObj.TryGetValue("due", out var val))
         {
-            Chores.Remove(chore);
+            dueDt = DateTime.Parse(val.ToString());
+        }
+        var newChore = new Chore(newChoreName, dueDt);
+        var dupes = Chores.Where(c => c.Name == newChore.Name).ToList();
+        foreach (var dupe in dupes)
+        {
+            Chores.Remove(dupe);
+        }
+        Chores.Add(newChore);
+        SaveChores();
+        var message = new Message
+        {
+            Content = $"Filed a task: {newChore.Name}",
+            Role = Role.Tool,
+            ToolCallId = toolCall.Id
+        };
+        Messages.Add(message);
+        MessageArrived?.Invoke(message);
+    }
+
+    public void Complete(ToolCall toolCall)
+    {
+        var argsJObj = JObject.Parse(toolCall.Function.Arguments);
+        var completedChoreName = argsJObj["title"].ToString();
+        var completeTaskContent = $"Completed the task to {completedChoreName}";
+        var completedChores = Chores.Where(c => c.Name == completedChoreName).ToList();
+        foreach (var completedChore in completedChores)
+        {
+            Chores.Remove(completedChore);
         }
         SaveChores();
+        var message = new Message
+        {
+            Content = completeTaskContent,
+            Role = Role.Tool,
+            ToolCallId = toolCall.Id
+        };
+        Messages.Add(message);
+        MessageArrived?.Invoke(message);
     }
 
-    private static void SaveChores()
+    public void List(ToolCall call)
+    {
+        var functionName = call.Function.Name;
+        var arguments = call.Function.Arguments;
+        var argsJObj = JObject.Parse(arguments);
+        var choreList = PromptList;
+        var listChoresContent = $"Chores:\n{choreList}";
+        var message = new Message
+        {
+            Content = listChoresContent,
+            Role = Role.Tool,
+            ToolCallId = call.Id
+        };
+        Messages.Add(message);
+        MessageArrived?.Invoke(message);
+    }
+
+    private void SaveChores()
     {
         var choreFilePath = GetFilePath();
-        var choresFileContents = string.Join('\n', Chores.Select(chore => {
+        var choresFileContents = string.Join('\n', Chores.Select(chore =>
+        {
             var dueStr = chore.DueDate.HasValue ? chore.DueDate.Value.ToShortDateString() : "null";
             var s = $"{chore.Name}, {dueStr}";
             return s;
-    }));
-        File.WriteAllText(choreFilePath, choresFileContents);
+        }));
+        System.IO.File.WriteAllText(choreFilePath, choresFileContents);
     }
 
-    public static void LoadChores()
+    public void LoadChores()
     {
         var choresFilePath = GetFilePath();
-        if (File.Exists(choresFilePath) == false)
+        if (System.IO.File.Exists(choresFilePath) == false)
         {
-            Add(new Chore("Come up with some chores."));
+            Chores.Add(new Chore("Come up with some chores."));
+            SaveChores();
         }
-        var choresFileContents = File.ReadAllText(choresFilePath);
-        Chores.AddRange(choresFileContents.Split('\n').Select(str => {
+        var choresFileContents = System.IO.File.ReadAllText(choresFilePath);
+        Chores.AddRange(choresFileContents.Split('\n').Select(str =>
+        {
             var s = str.Split(',');
             var choreName = s[0];
             DateTime? dueDt = null;
@@ -58,7 +122,7 @@ public static class ChoreManager
         }));
     }
 
-    private static string GetFilePath()
+    private string GetFilePath()
     {
         var appDataDirPath = Environment.SpecialFolder.ApplicationData.ToString();
         string appDataFullPath = Path.GetFullPath(appDataDirPath);

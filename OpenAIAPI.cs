@@ -17,7 +17,7 @@ public class OpenAIApi
             new Tool {
                 Function = new ToolFunction {
                     Name = "file_task",
-                    Description = "Adds a task to the family task list.",
+                    Description = "Adds a task to the family task list. Replaces tasks with the same title.",
                     Parameters = new ToolFunctionParameters {
                         Properties = new Dictionary<string, ToolFunctionParameterProperty> {
                             {
@@ -87,18 +87,18 @@ public class OpenAIApi
             new Tool {
                 Function = new ToolFunction
                 {
-                    Name = "do_nothing",
+                    Name = "wait_for_instructions",
                     Description = "Call this function when there are no actions to be taken."
                 }
             }
         };
 
-    public async Task<OpenAIApiResponse> SendRequestAsync(string initialPrompString, IEnumerable<MeaningfulChunk> chunks)
+    public async Task<OpenAIApiResponse> SendRequestAsync(List<Message> messages)
     {
         var next = new ChatCompletionRequest
         {
             Model = modelId,
-            Messages = CreateMessages(initialPrompString, chunks),
+            Messages = messages,
             Temperature = 0.7,
             Tools = _tools,
             ResponseFormat = new ResponseFormat
@@ -130,11 +130,10 @@ public class OpenAIApi
                 var failureResponseContent = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"Response - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
             }
-
-            response.EnsureSuccessStatusCode();
+            
             var responseContent = await response.Content.ReadAsStringAsync();
             var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
-            //Console.WriteLine(responseContent);
+            Console.WriteLine(responseContent);
             return responseContentObject;
         }
         catch (Exception ex)
@@ -142,51 +141,6 @@ public class OpenAIApi
             Console.WriteLine($"OpenAI request failed: {ex} {ex.Message} {requestJson}");
             return null;
         }
-    }
-
-    private List<Message> CreateMessages(string initialPrompString, IEnumerable<MeaningfulChunk> chunks)
-    {
-        var messages = new List<Message>
-        {
-            new Message
-            {
-                Role = Role.System,
-                Content = initialPrompString
-            }
-        };
-
-        foreach (var chunk in chunks)
-        {
-            // Create a Message for the speech recognition result
-            if (chunk.RecognitionEvent != null && chunk.RecognitionEvent.Result != null)
-            {
-                var userMessage = new Message
-                {
-                    Content = $"{chunk.RecognitionTimestamp.ToShortTimeString()}: {chunk.RecognitionEvent.Result.Text}",
-                    Role = Role.User
-                };
-                messages.Add(userMessage);
-            }
-
-            // Create a Message for the OpenAI API response
-            if (chunk.OpenAITask != null && chunk.OpenAITask.Result != null)
-            {
-                var aiResponseMessage = chunk.OpenAITask.Result.Choices[0].Message;
-                messages.Add(aiResponseMessage);
-
-                // According to OpenAI service: "An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'."
-                if (chunk.ToolCallTasks != null && chunk.ToolCallTasks.Result != null)
-                    messages.AddRange(chunk.ToolCallTasks.Result);
-
-            }
-        }
-
-        return messages;
-    }
-
-    private Tool GetToolByName(string toolName)
-    {
-        return _tools.First(tool => tool.Function.Name == toolName);
     }
 }
 
@@ -209,6 +163,9 @@ public class OpenAIApiResponse
 
     [JsonProperty("choices")]
     public List<Choice> Choices { get; set; }
+
+    [JsonProperty("error", NullValueHandling = NullValueHandling.Ignore)]
+    public OpenAiError? Error {get; set; }
 }
 
 public class Usage
@@ -412,4 +369,12 @@ public class ResponseFormat
 {
     [JsonProperty("type", Required = Required.Always)]
     public string Type { get; set; }
+}
+
+public class OpenAiError {
+    [JsonProperty("message")]
+    public string Message {get; set; } = string.Empty;
+
+    [JsonProperty("type")]
+    public string Type = string.Empty;
 }
