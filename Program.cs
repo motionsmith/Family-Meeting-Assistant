@@ -58,13 +58,19 @@ class Program
         var listToolMessage = await choreManager.List(tkn);
         messageManager.AddMessage(new Message { Content = listToolMessage, Role = Role.System});
         
-        // This chunk will allow the Assistant to have the first message.
-        messageManager.Messages.Last().Content += "In your opening message, you creatively hint or suggest that we have somehow interrupted, surprised, or caught you off guard. Hit the most important bits of information but you still don't forget a bit of levity.";
-        var openingMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, tkn);
-        messageManager.AddMessage(openingMessage);
-        if (string.IsNullOrEmpty(openingMessage.Content) == false)
+        // This message informs the assistant of stuff it needs to know as soon as it joins.
+        var systemJoinMessage = new Message {
+            Content = $"You have just joined the meeting. The date is {DateTime.Now.ToString()}.\n In your shortIt's opening message, you creatively hint or suggest that we have somehow interrupted, surprised, or caught you off guard. Briefly hit the most important bits of information, but don't forget a bit of levity.",
+            Role = Role.System
+        };
+        messageManager.Messages.Add(systemJoinMessage);
+        
+        // This message will allow the Assistant to have the first message.
+        var assistantJoinMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, tkn);
+        messageManager.AddMessage(assistantJoinMessage);
+        if (string.IsNullOrEmpty(assistantJoinMessage.Content) == false)
         {
-            await speechManager.Speak(openingMessage.Content, tkn);
+            await speechManager.Speak(assistantJoinMessage.Content, tkn);
         }
         Console.WriteLine("Speak into your microphone.");
         while (true)
