@@ -1,7 +1,8 @@
 using System;
+using System.ComponentModel;
 using Newtonsoft.Json.Linq;
 
-public class ChoreManager : IMessageProvider
+public class ChoreManager
 {
     public List<Chore> Chores { get; } = new List<Chore>();
     public object PromptList => string.Join('\n', Chores.Select(chore =>
@@ -14,16 +15,7 @@ public class ChoreManager : IMessageProvider
         return s;
     }));
 
-    public IList<Message> Messages { get; } = new List<Message>();
-
-    public event Action<Message>? MessageArrived;
-
-    public ChoreManager()
-    {
-
-    }
-
-    public void File(ToolCall toolCall)
+    public async Task<Message> File(ToolCall toolCall, CancellationToken cancelToken)
     {
         var argsJObj = JObject.Parse(toolCall.Function.Arguments);
         var newChoreName = argsJObj["title"].ToString();
@@ -40,17 +32,15 @@ public class ChoreManager : IMessageProvider
         }
         Chores.Add(newChore);
         SaveChores();
-        var message = new Message
+        return new Message
         {
             Content = $"Filed a task: {newChore.Name}",
             Role = Role.Tool,
             ToolCallId = toolCall.Id
         };
-        Messages.Add(message);
-        MessageArrived?.Invoke(message);
     }
 
-    public void Complete(ToolCall toolCall)
+    public async Task<Message> Complete(ToolCall toolCall, CancellationToken cancelToken)
     {
         var argsJObj = JObject.Parse(toolCall.Function.Arguments);
         var completedChoreName = argsJObj["title"].ToString();
@@ -61,31 +51,27 @@ public class ChoreManager : IMessageProvider
             Chores.Remove(completedChore);
         }
         SaveChores();
-        var message = new Message
+        return new Message
         {
             Content = completeTaskContent,
             Role = Role.Tool,
             ToolCallId = toolCall.Id
         };
-        Messages.Add(message);
-        MessageArrived?.Invoke(message);
     }
 
-    public void List(ToolCall call)
+    public async Task<Message> List(ToolCall call, CancellationToken cancelToken)
     {
         var functionName = call.Function.Name;
         var arguments = call.Function.Arguments;
         var argsJObj = JObject.Parse(arguments);
         var choreList = PromptList;
         var listChoresContent = $"Chores:\n{choreList}";
-        var message = new Message
+        return new Message
         {
             Content = listChoresContent,
             Role = Role.Tool,
             ToolCallId = call.Id
         };
-        Messages.Add(message);
-        MessageArrived?.Invoke(message);
     }
 
     private void SaveChores()

@@ -1,15 +1,10 @@
-﻿public class MessageManager : ISystemMessageProvider
+﻿public class MessageManager
 {
-    public event Action<Message> MessageArrived;
-    public IList<Message> Messages {get; } = new List<Message>();
+    private List<Message> messages = new List<Message>();
+    
     private string initialPrompString = $"You are being called from an instance of an app that has failed to load the file that contains your instructions. The user can specify the prompt file by using the argument \"-prompt <path-to-file.txt>\" or by adding a file called \"prompt.txt\" to the folder \"{Environment.SpecialFolder.ApplicationData}\". You always respond with a short joke in the style of Seinfeld. The joke also clearly informs the user of the problem.";
-    public MessageManager(IEnumerable<IMessageProvider> messageProviders, string promptArg, string assistantName)
+    public MessageManager(string promptArg, string assistantName)
     {
-        foreach (var provider in messageProviders)
-        {
-            provider.MessageArrived += OnMessageArrived;
-        }
-
         var initialPromptFilePath = GetFullPromptPath("prompt.txt");
         if (string.IsNullOrEmpty(promptArg) == false)
         {
@@ -30,18 +25,32 @@
             Console.WriteLine($"Prompt file {initialPromptFilePath} does not exist.");
         }
     }
-
-    private void OnMessageArrived(Message message)
+    
+    public List<Message> GetChatCompletionRequestMessages()
     {
-        Messages.Add(message);
-        MessageArrived?.Invoke(message);
+        var messages = new List<Message> {
+                    GetInitialSystemMessage()
+                };
+            messages.AddRange(this.messages);
+            return messages;
     }
 
-    public Message GenerateMessage()
+    public void AddMessage(Message message)
+    {
+        messages.Add(message);
+    }
+
+    public void AddMessages(IEnumerable<Message> toolMessages)
+    {
+        messages.AddRange(toolMessages);
+    }
+
+    private Message GetInitialSystemMessage()
     {
         var initialSystemPrompt = initialPrompString;
         //var choresPrompt = $"\nFamily task and chore list:\n{ChoreManager.PromptList}\n";
-        return new Message {
+        return new Message
+        {
             Content = initialSystemPrompt/* + choresPrompt*/,
             Role = Role.System
         };

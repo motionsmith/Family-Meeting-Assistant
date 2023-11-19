@@ -1,4 +1,3 @@
-Come up with some chores.
-Mow the lawn
-Wash Tango's bowls on Sunday
-Add timestamps to the system
+Water indoor plants on Sunday, 11/19/2023
+Wash Tango's bowls on Sunday, 11/19/2023
+Mow the lawn, null

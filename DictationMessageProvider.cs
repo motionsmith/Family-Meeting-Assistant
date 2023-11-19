@@ -1,13 +1,12 @@
-﻿using Microsoft.CognitiveServices.Speech;
+﻿using System.Collections.Concurrent;
+using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
 
-public class DictationMessageProvider : IMessageProvider
+public class DictationMessageProvider
 {
-    public event Action<Message>? MessageArrived;
-
     private SpeechRecognizer speechRecognizer;
 
-    public IList<Message> Messages {get;} = new List<Message>();
+    private ConcurrentQueue<Message> messageQueue = new ConcurrentQueue<Message>();
 
     public DictationMessageProvider(SpeechRecognizer speechRecognizer)
     {
@@ -27,15 +26,16 @@ public class DictationMessageProvider : IMessageProvider
                      Content = $"{DateTime.Now.ToShortTimeString()}: {e.Result.Text}",
                      Role = Role.User
                 };
-                Messages.Add(recognitionMessage);
-                MessageArrived?.Invoke(recognitionMessage);
-                Console.ForegroundColor = ConsoleColor.Green;
+                messageQueue.Enqueue(recognitionMessage);
+
+                // Debug
+                Console.ForegroundColor = ConsoleColor.Blue;
                 Console.WriteLine($"Heard \"{e.Result.Text}\"");
                 Console.ResetColor();
             }
             else if (e.Result.Reason == ResultReason.NoMatch)
             {
-                Console.WriteLine($"NOMATCH: Speech could not be recognized.");
+                //Console.WriteLine($"NOMATCH: Speech could not be recognized.");
             }
         };
 
@@ -59,9 +59,29 @@ public class DictationMessageProvider : IMessageProvider
         };
     }
 
-    internal async Task StopContinuousRecognitionAsync()
+    public async Task StopContinuousRecognitionAsync()
     {
         await speechRecognizer.StopContinuousRecognitionAsync();
+    }
+
+    public async Task<Message> GetNextMessageAsync(CancellationToken cancelToken)
+    {
+        Message? result = null;
+        while (result == null)
+        {
+            if (messageQueue.IsEmpty == false)
+            {
+                if (messageQueue.TryDequeue(out var outMsg))
+                {
+                    result = outMsg;
+                }
+            }
+            else
+            {
+                await Task.Delay(50, cancelToken);
+            }
+        }
+        return result;
     }
 
     internal async Task StartContinuousRecognitionAsync()

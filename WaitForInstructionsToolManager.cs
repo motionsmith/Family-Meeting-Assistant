@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json.Linq;
 
-public class WaitForInstructionsToolManager : IMessageProvider
+public class WaitForInstructionsToolManager
 {
     public IList<Message> Messages {get;} = new List<Message>();
 
@@ -11,20 +11,13 @@ public class WaitForInstructionsToolManager : IMessageProvider
 
     }
 
-    public void WaitForInstructions(ToolCall toolCall)
+    public async Task<Message> WaitForInstructions(ToolCall toolCall, CancellationToken cancelToken)
     {
-        var functionName = toolCall.Function.Name;
-        var arguments = toolCall.Function.Arguments;
-        var argsJObj = JObject.Parse(arguments);
-
-        var doNothingContent = $"Mhm";
-        var message = new Message
+        return new Message
         {
-            Content = doNothingContent,
+            Content = "Assistant is waiting on instructions.",
             Role = Role.Tool,
             ToolCallId = toolCall.Id
         };
-        Messages.Add(message);
-        MessageArrived?.Invoke(message);
     }
 }

@@ -2,43 +2,45 @@
 using Microsoft.CognitiveServices.Speech;
 using Newtonsoft.Json.Linq;
 
-public class SpeechManager : IMessageProvider
+public class SpeechManager
 {
-    private SpeechConfig speechConfig;
     private SpeechRecognizer speechRecognizer;
     private SpeechSynthesizer speechSynthesizer;
+    private string assistantName;
 
-    public IList<Message> Messages { get; } = new List<Message>();
-
-    public event Action<Message>? MessageArrived;
-
-    public SpeechManager(SpeechConfig speechConfig, SpeechRecognizer speechRecognizer, SpeechSynthesizer speechSynthesizer)
+    public SpeechManager(SpeechRecognizer speechRecognizer, SpeechSynthesizer speechSynthesizer, string assistantName)
     {
-        this.speechConfig = speechConfig;
         this.speechRecognizer = speechRecognizer;
         this.speechSynthesizer = speechSynthesizer;
+        this.assistantName = assistantName;
     }
 
-    public async Task Speak(ToolCall toolCall)
+    public async Task Speak(string message, CancellationToken cancelToken)
     {
-        var functionName = toolCall.Function.Name;
+        Console.Write($"{assistantName} Says ");
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"\"{message}\"");
+        Console.ResetColor();
+        await speechRecognizer.StopContinuousRecognitionAsync();
+        var speechSynthesisResult = await speechSynthesizer.SpeakTextAsync(message);
+        OutputSpeechSynthesisResult(speechSynthesisResult, message);
+        await speechRecognizer.StartContinuousRecognitionAsync();
+    }
+
+    public async Task<Message> SpeakFromToolCall(ToolCall toolCall, CancellationToken cancelToken)
+    {
         var arguments = toolCall.Function.Arguments;
         var argsJObj = JObject.Parse(arguments);
 
         var textToSpeak = argsJObj["text"]?.ToString();
         var speakContent = $"Spoke {textToSpeak}";
-        await speechRecognizer.StopContinuousRecognitionAsync();
-        var speechSynthesisResult = await speechSynthesizer.SpeakTextAsync(textToSpeak);
-        OutputSpeechSynthesisResult(speechSynthesisResult, textToSpeak);
-        await speechRecognizer.StartContinuousRecognitionAsync();
-        var message = new Message
+        await Speak(textToSpeak, cancelToken);
+        return new Message
         {
             Content = speakContent,
             Role = Role.Tool,
             ToolCallId = toolCall.Id
         };
-        Messages.Add(message);
-        MessageArrived?.Invoke(message);
     }
 
     void OutputSpeechSynthesisResult(SpeechSynthesisResult speechSynthesisResult, string text)

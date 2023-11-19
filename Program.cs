@@ -1,16 +1,7 @@
-﻿using System;
-using System.IO;
-using System.Threading.Tasks;
-using System.Net.Http;
-using System.ComponentModel.DataAnnotations;
-using System.Text.RegularExpressions;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-using System.Runtime.Serialization;
+﻿using System.Diagnostics;
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
 
 class Program
 {
@@ -18,12 +9,9 @@ class Program
     private static readonly string speechKey = Environment.GetEnvironmentVariable("SPEECH_KEY");
     private static readonly string speechRegion = Environment.GetEnvironmentVariable("SPEECH_REGION");
     private static readonly string assistantName = Environment.GetEnvironmentVariable("ASSISTANT_NAME");
-
-    
-    private static CancellationTokenSource cancellationTokenSrc = new CancellationTokenSource();
+    private static readonly string owmKey = Environment.GetEnvironmentVariable("OWM_KEY");
     
     private static OpenAIApi openAIApi = new OpenAIApi();
-    
     private static SpeechConfig? speechConfig;
     private static SpeechSynthesizer? speechSynthesizer;
     private static AudioConfig? audioConfig;
@@ -32,96 +20,134 @@ class Program
     private static ChoreManager? choreManager;
     private static SpeechManager? speechManager;
     private static SpeechRecognizer? speechRecognizer;
-    private static WaitForInstructionsToolManager? waitForInstructionsToolManager;
+    private static OpenWeatherMapClient? openWeatherMapClient;
+
+    public static double Lat = 47.5534058;
+    public static double Long = -122.3093843;
+
 
     async static Task Main(string[] args)
     {
+        openWeatherMapClient = new OpenWeatherMapClient(owmKey);
         choreManager = new ChoreManager();
         choreManager.LoadChores();
-        var speechConfig = SpeechConfig.FromSubscription(speechKey, speechRegion);
+        speechConfig = SpeechConfig.FromSubscription(speechKey, speechRegion);
         speechConfig.SpeechRecognitionLanguage = "en-US";
         audioConfig = AudioConfig.FromDefaultMicrophoneInput();
         speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
         speechSynthesizer = new SpeechSynthesizer(speechConfig);
         dictationMessageProvider = new DictationMessageProvider(speechRecognizer);
-        speechManager = new SpeechManager(speechConfig, speechRecognizer, speechSynthesizer);
-        waitForInstructionsToolManager = new WaitForInstructionsToolManager();
-        var promptArg = ParseArguments("prompt", args);
-        var messageProviders = new IMessageProvider[] { dictationMessageProvider, choreManager, speechManager, waitForInstructionsToolManager};
-        messageManager = new MessageManager(messageProviders, promptArg, assistantName);
-
-        messageManager.MessageArrived += async msg => {
-            if (msg.Role == Role.User)
-            {
-                var messages = new List<Message> {
-                    messageManager.GenerateMessage()
-                };
-                messages.AddRange(messageManager.Messages);
-                Console.WriteLine($"Kicking off another request!");
-                var result = await openAIApi.SendRequestAsync(messages);
-                if (result.Error == null)
-                {
-                    messageManager.Messages.Add(result.Choices[0].Message);
-                    await HandleToolCall(result);
-                }
-                else
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine(result.Error.Message);
-                    Console.ResetColor();
-                }
-            }
-        };
+        speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, assistantName);
+        messageManager = new MessageManager(ParseArguments("prompt", args), assistantName);
 
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
         {
             await dictationMessageProvider.StopContinuousRecognitionAsync();
         };
 
-        Console.WriteLine("Speak into your microphone.");
-        await dictationMessageProvider.StartContinuousRecognitionAsync();
+        var tkn = new CancellationTokenSource().Token;
+        //await speechManager.Speak("Motionsmith", tkn);
+        
+        // This chunk will allow the Assistant to have the first message.
+        var chatMessagesForOpening = messageManager.GetChatCompletionRequestMessages();
+        chatMessagesForOpening.Last().Content += "\nIn your opening message, you hit the most important bits of information but you still don't forget a bit of levity.";
+        var openingMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForOpening, tkn);
+        messageManager.AddMessage(openingMessage);
+        if (string.IsNullOrEmpty(openingMessage.Content) == false)
+        {
+            await speechManager.Speak(openingMessage.Content, tkn);
+        }
+        
+        var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(Lat, Long, tkn);
+        messageManager.AddMessage(new Message { Content = $"OpenWeatherMap current weather:\n{weatherToolmessage}", Role = Role.System});
 
-        while (true) await Task.Delay(Timeout.Infinite);
+        Console.WriteLine("Speak into your microphone.");
+
+        while (true)
+        {
+            Console.WriteLine($"[Loop] Waiting for user message");
+            var userMessage = await dictationMessageProvider.GetNextMessageAsync(tkn);
+            messageManager.AddMessage(userMessage);
+            Console.WriteLine($"[Loop] Waiting for tool call message");
+            var toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.GetChatCompletionRequestMessages(), tkn);
+            messageManager.AddMessage(toolCallMessage);
+            Console.WriteLine($"[Loop] Waiting for tool messages");
+            var toolMessages = await HandleToolCall(toolCallMessage, tkn);
+            messageManager.AddMessages(toolMessages);
+
+            var messagesToSpeak = toolMessages.Where(tm => string.IsNullOrEmpty(tm.Content) == false && tm.Role == Role.Assistant);
+            foreach (var msg in messagesToSpeak)
+            {
+                if (string.IsNullOrEmpty(msg.Content) == false)
+                {
+                    Console.WriteLine($"[Loop] Waiting for Assistant to finish speaking.");
+                    await speechManager.Speak(msg.Content, tkn);
+                }
+            }
+        }
     }
 
-    private static async Task HandleToolCall(OpenAIApiResponse openAiResponse)
+    private static async Task<IEnumerable<Message>> HandleToolCall(Message message, CancellationToken cancelToken)
     {
-        var aiResponseMessage = openAiResponse.Choices[0].Message;
-        if (aiResponseMessage.ToolCalls == null)
+        if (message.ToolCalls == null || message.ToolCalls.Count == 0)
         {
-            return;
+            return new List<Message>();
         }
 
-        Console.WriteLine($"[{assistantName}] {aiResponseMessage.ToolCalls[0].Function}");
-        foreach (var call in aiResponseMessage.ToolCalls)
+        var messages = new List<Message>();
+        foreach (var call in message.ToolCalls)
         {
             var functionName = call.Function.Name;
             var arguments = call.Function.Arguments;
             var argsJObj = JObject.Parse(arguments);
-
+            Console.WriteLine($"[{assistantName}] {functionName}({arguments})");
             switch (functionName)
             {
                 case "file_task":
-                    choreManager.File(call);
+                    var fileToolMessage = await choreManager.File(call, cancelToken);
+                    messages.Add(fileToolMessage);
                     break;
                 case "complete_task":
-                    choreManager.Complete(call);
+                    var completeToolMessage = await choreManager.Complete(call, cancelToken);
+                    messages.Add(completeToolMessage);
                     break;
                 case "list_tasks":
-                    choreManager.List(call);
+                    var listToolMessage = await choreManager.List(call, cancelToken);
+                    messages.Add(listToolMessage);
+                    var chatMessagesForListTasks = messageManager.GetChatCompletionRequestMessages();
+                    chatMessagesForListTasks.AddRange(messages);
+                    var listAssistantMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForListTasks, cancelToken);
+                    messages.Add(listAssistantMessage);
                     break;
                 case "speak":
-                    await speechManager.Speak(call);
+                    var speakToolMessage = await speechManager.SpeakFromToolCall(call, cancelToken);
+                    messages.Add(speakToolMessage);
                     break;
-                case "wait_for_instructions":
-                    waitForInstructionsToolManager.WaitForInstructions(call);
+                case "get_weather":
+                    var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(call, 47.5534058, -122.3093843, cancelToken);
+                    messages.Add(weatherToolmessage);
+                    var chatMessagesForGetWeather = messageManager.GetChatCompletionRequestMessages();
+                    chatMessagesForGetWeather.AddRange(messages);
+                    chatMessagesForGetWeather.Last().Content += "\nUse fahrenheit units.";
+                    var weatherAssistantMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForGetWeather, cancelToken);
+                    messages.Add(weatherAssistantMessage);
                     break;
+                /*case "wait_for_instructions":
+                    var waitToolMessage = await waitForInstructionsToolManager.WaitForInstructions(call, cancelToken);
+                    // TODO Add to message history
+                    break;*/
                 default:
                     // Handle unknown function
-                    Console.WriteLine($"Can't call Unknown tool {functionName}");
+                    var unknownToolMessage = new Message {
+                        Content = $"Unknown tool function name {functionName}",
+                        ToolCallId = call.Id,
+                        Role = Role.Tool
+                    };
+                    messages.Add(unknownToolMessage);
                     break;
             }
         }
+        return messages;
     }
 
     static string? ParseArguments(string argName, string[] args)
