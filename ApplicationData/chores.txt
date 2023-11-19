@@ -1,3 +1,2 @@
-Mow the lawn, null
-Turn on Seahawks game, 11/19/2023
-Implement family meeting assistant message persistence, null
+Mow the lawn,null
+Implement family meeting assistant message persistence,null

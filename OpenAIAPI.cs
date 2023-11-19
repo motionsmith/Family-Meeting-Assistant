@@ -94,6 +94,13 @@ public class OpenAIApi
                     Description = "Returns current local weather data from Open Weather Map API."
                 }
             },
+            new Tool {
+                Function = new ToolFunction
+                {
+                    Name = "save_chat",
+                    Description = "Saves the chage messages to the family laptop. The messages will be reloaded to create context for you during the next family meeting."
+                }
+            }
         };
 
         public OpenAIApi()

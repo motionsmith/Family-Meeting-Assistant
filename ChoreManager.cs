@@ -85,7 +85,7 @@ public class ChoreManager
         var choresFileContents = string.Join('\n', Chores.Select(chore =>
         {
             var dueStr = chore.DueDate.HasValue ? chore.DueDate.Value.ToShortDateString() : "null";
-            var s = $"{chore.Name}, {dueStr}";
+            var s = $"{chore.Name},{dueStr}";
             return s;
         }));
         System.IO.File.WriteAllText(choreFilePath, choresFileContents);

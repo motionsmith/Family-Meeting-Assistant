@@ -47,6 +47,7 @@ class Program
         };
 
         var tkn = new CancellationTokenSource().Token;
+        await messageManager.LoadAsync(tkn);
         //await speechManager.Speak("ET", tkn);
 
         var initialPromptMessage = await messageManager.CreateInitialSystemPrompt(tkn);
@@ -60,7 +61,7 @@ class Program
         
         // This message informs the assistant of stuff it needs to know as soon as it joins.
         var systemJoinMessage = new Message {
-            Content = $"You have just joined the meeting. The date is {DateTime.Now.ToString()}.\n In your shortIt's opening message, you creatively hint or suggest that we have somehow interrupted, surprised, or caught you off guard. Briefly hit the most important bits of information, but don't forget a bit of levity.",
+            Content = $"You have just joined the meeting. The date is {DateTime.Now.ToString()}.\n In your 10-word opening message, you creatively hint or suggest that we have somehow interrupted, surprised, or caught you off guard. Briefly hit the most important bits of information, but don't forget a bit of levity.",
             Role = Role.System
         };
         messageManager.Messages.Add(systemJoinMessage);
@@ -83,7 +84,6 @@ class Program
             messageManager.AddMessage(toolCallMessage);
             Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCall(toolCallMessage, tkn);
-            messageManager.AddMessages(toolMessages);
             var messagesToSpeak = toolMessages.Where(tm => string.IsNullOrEmpty(tm.Content) == false && tm.Role == Role.Assistant);
             foreach (var msg in messagesToSpeak)
             {
@@ -116,29 +116,46 @@ class Program
                 case "file_task":
                     var fileToolMessage = await choreManager.File(call, cancelToken);
                     messages.Add(fileToolMessage);
+                    messageManager.AddMessage(fileToolMessage);
                     break;
                 case "complete_task":
                     var completeToolMessage = await choreManager.Complete(call, cancelToken);
                     messages.Add(completeToolMessage);
+                    messageManager.AddMessage(completeToolMessage);
                     var completeTaskAssistantMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, cancelToken);
                     messages.Add(completeTaskAssistantMessage);
+                    messageManager.AddMessage(completeTaskAssistantMessage);
                     break;
                 case "list_tasks":
                     var listToolMessage = await choreManager.List(call, cancelToken);
                     messages.Add(listToolMessage);
+                    messageManager.AddMessage(listToolMessage);
                     var listAssistantMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, cancelToken);
                     messages.Add(listAssistantMessage);
+                    messageManager.AddMessage(listAssistantMessage);
                     break;
                 case "speak":
                     var speakToolMessage = await speechManager.SpeakFromToolCall(call, cancelToken);
                     messages.Add(speakToolMessage);
+                    messageManager.AddMessage(speakToolMessage);
                     break;
                 case "get_weather":
                     var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(call, Lat, Long, cancelToken);
                     messages.Add(weatherToolmessage);
+                    messageManager.AddMessage(weatherToolmessage);
                     messageManager.ChatCompletionRequestMessages.Last().Content += "\nUse fahrenheit units.\n";
                     var weatherAssistantMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, cancelToken);
                     messages.Add(weatherAssistantMessage);
+                    messageManager.AddMessage(weatherAssistantMessage);
+                    break;
+                case "save_chat":
+                    var saveToolMessage = new Message {
+                        Role = Role.Tool,
+                        ToolCallId = call.Id,
+                        Content = "Chat messages saved"
+                    };
+                    messageManager.AddMessage(saveToolMessage);
+                    await messageManager.SaveAsync(cancelToken);
                     break;
                 default:
                     // Handle unknown function
@@ -148,6 +165,7 @@ class Program
                         Role = Role.Tool
                     };
                     messages.Add(unknownToolMessage);
+                    messageManager.AddMessage(unknownToolMessage);
                     break;
             }
         }
