@@ -42,7 +42,7 @@
         var initialPromptString = "Tell me a joke";
         if (File.Exists(initialPromptFilePath))
         {
-            string initialPromptFileText = await File.ReadAllTextAsync(initialPromptFilePath);
+            string initialPromptFileText = await File.ReadAllTextAsync(initialPromptFilePath, cancelToken);
             initialPromptString = InsertPromptVariables(initialPromptFileText);
         }
         else
