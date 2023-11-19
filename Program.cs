@@ -39,7 +39,7 @@ class Program
         dictationMessageProvider = new DictationMessageProvider(speechRecognizer);
         speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, assistantName);
         //await dictationMessageProvider.StartContinuousRecognitionAsync();
-        messageManager = new MessageManager(ParseArguments("prompt", args), assistantName);
+        messageManager = new MessageManager(assistantName);
 
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
         {
@@ -49,6 +49,9 @@ class Program
         var tkn = new CancellationTokenSource().Token;
         //await speechManager.Speak("ET", tkn);
 
+        var initialPromptMessage = await messageManager.CreateInitialSystemPrompt(tkn);
+        messageManager.AddMessage(initialPromptMessage);
+
         var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(Lat, Long, tkn);
         messageManager.AddMessage(new Message { Content = $"OpenWeatherMap current weather (report in Fehrenheit):\n\n{weatherToolmessage}", Role = Role.System});
 
@@ -56,9 +59,8 @@ class Program
         messageManager.AddMessage(new Message { Content = listToolMessage, Role = Role.System});
         
         // This chunk will allow the Assistant to have the first message.
-        var chatMessagesForOpening = messageManager.GetChatCompletionRequestMessages();
-        chatMessagesForOpening.Last().Content += "\nIn your short opening message, you hit the most important bits of information but you still don't forget a bit of levity.";
-        var openingMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForOpening, tkn);
+        messageManager.Messages.Last().Content += "In your opening message, you creatively hint or suggest that we have somehow interrupted, surprised, or caught you off guard. Hit the most important bits of information but you still don't forget a bit of levity.";
+        var openingMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, tkn);
         messageManager.AddMessage(openingMessage);
         if (string.IsNullOrEmpty(openingMessage.Content) == false)
         {
@@ -71,7 +73,7 @@ class Program
             var userMessage = await dictationMessageProvider.ReadLine("Eric", tkn);//GetNextMessageAsync(tkn);
             messageManager.AddMessage(userMessage);
             Console.WriteLine($"[Loop] Waiting for tool call message");
-            var toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.GetChatCompletionRequestMessages(), tkn);
+            var toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.ChatCompletionRequestMessages, tkn);
             messageManager.AddMessage(toolCallMessage);
             Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCall(toolCallMessage, tkn);
@@ -112,17 +114,13 @@ class Program
                 case "complete_task":
                     var completeToolMessage = await choreManager.Complete(call, cancelToken);
                     messages.Add(completeToolMessage);
-                    var chatMessagesForCompleteTask = messageManager.GetChatCompletionRequestMessages();
-                    chatMessagesForCompleteTask.AddRange(messages);
-                    var completeTaskAssistantMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForCompleteTask, cancelToken);
+                    var completeTaskAssistantMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, cancelToken);
                     messages.Add(completeTaskAssistantMessage);
                     break;
                 case "list_tasks":
                     var listToolMessage = await choreManager.List(call, cancelToken);
                     messages.Add(listToolMessage);
-                    var chatMessagesForListTasks = messageManager.GetChatCompletionRequestMessages();
-                    chatMessagesForListTasks.AddRange(messages);
-                    var listAssistantMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForListTasks, cancelToken);
+                    var listAssistantMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, cancelToken);
                     messages.Add(listAssistantMessage);
                     break;
                 case "speak":
@@ -132,10 +130,8 @@ class Program
                 case "get_weather":
                     var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(call, Lat, Long, cancelToken);
                     messages.Add(weatherToolmessage);
-                    var chatMessagesForGetWeather = messageManager.GetChatCompletionRequestMessages();
-                    chatMessagesForGetWeather.AddRange(messages);
-                    chatMessagesForGetWeather.Last().Content += "\nUse fahrenheit units.\n";
-                    var weatherAssistantMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForGetWeather, cancelToken);
+                    messageManager.ChatCompletionRequestMessages.Last().Content += "\nUse fahrenheit units.\n";
+                    var weatherAssistantMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, cancelToken);
                     messages.Add(weatherAssistantMessage);
                     break;
                 default:
