@@ -15,16 +15,18 @@ public class SpeechManager
         this.assistantName = assistantName;
     }
 
-    public async Task Speak(string message, CancellationToken cancelToken)
+    public async Task Speak(string message, CancellationToken cancelToken, bool autoPauseSpeechRecognizer = false)
     {
         Console.Write($"{assistantName} Says ");
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine($"\"{message}\"");
         Console.ResetColor();
-        await speechRecognizer.StopContinuousRecognitionAsync();
+        if (autoPauseSpeechRecognizer)
+            await speechRecognizer.StopContinuousRecognitionAsync();
         var speechSynthesisResult = await speechSynthesizer.SpeakTextAsync(message);
         OutputSpeechSynthesisResult(speechSynthesisResult, message);
-        await speechRecognizer.StartContinuousRecognitionAsync();
+        if (autoPauseSpeechRecognizer)
+            await speechRecognizer.StartContinuousRecognitionAsync();
     }
 
     public async Task<Message> SpeakFromToolCall(ToolCall toolCall, CancellationToken cancelToken)

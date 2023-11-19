@@ -23,7 +23,7 @@ public class DictationMessageProvider
             if (e.Result.Reason == ResultReason.RecognizedSpeech)
             {
                 var recognitionMessage = new Message {
-                     Content = $"{DateTime.Now.ToShortTimeString()}: {e.Result.Text}",
+                     Content = $"{DateTime.Now.ToShortTimeString()}\n:User transcription: {e.Result.Text}",
                      Role = Role.User
                 };
                 messageQueue.Enqueue(recognitionMessage);
@@ -62,6 +62,12 @@ public class DictationMessageProvider
     public async Task StopContinuousRecognitionAsync()
     {
         await speechRecognizer.StopContinuousRecognitionAsync();
+    }
+
+    public async Task<Message> ReadLine(string userName, CancellationToken cancelToken)
+    {
+        var userInputText = Console.ReadLine();
+        return new Message { Content = $"{DateTime.Now.ToShortTimeString()}\n{userName} (typed): {userInputText}", Role = Role.User };
     }
 
     public async Task<Message> GetNextMessageAsync(CancellationToken cancelToken)

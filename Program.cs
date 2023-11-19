@@ -38,7 +38,7 @@ class Program
         speechSynthesizer = new SpeechSynthesizer(speechConfig);
         dictationMessageProvider = new DictationMessageProvider(speechRecognizer);
         speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, assistantName);
-        await dictationMessageProvider.StartContinuousRecognitionAsync();
+        //await dictationMessageProvider.StartContinuousRecognitionAsync();
         messageManager = new MessageManager(ParseArguments("prompt", args), assistantName);
 
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
@@ -50,13 +50,12 @@ class Program
         //await speechManager.Speak("ET", tkn);
 
         var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(Lat, Long, tkn);
-        messageManager.AddMessage(new Message { Content = $"OpenWeatherMap current weather:\n{weatherToolmessage}", Role = Role.System});
+        messageManager.AddMessage(new Message { Content = $"OpenWeatherMap current weather (report in Fehrenheit):\n\n{weatherToolmessage}", Role = Role.System});
 
         var listToolMessage = await choreManager.List(tkn);
         messageManager.AddMessage(new Message { Content = listToolMessage, Role = Role.System});
         
         // This chunk will allow the Assistant to have the first message.
-        /*
         var chatMessagesForOpening = messageManager.GetChatCompletionRequestMessages();
         chatMessagesForOpening.Last().Content += "\nIn your opening message, you hit the most important bits of information but you still don't forget a bit of levity.";
         var openingMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForOpening, tkn);
@@ -65,13 +64,11 @@ class Program
         {
             await speechManager.Speak(openingMessage.Content, tkn);
         }
-        */
-        
         Console.WriteLine("Speak into your microphone.");
         while (true)
         {
             Console.WriteLine($"[Loop] Waiting for user message");
-            var userMessage = await dictationMessageProvider.GetNextMessageAsync(tkn);
+            var userMessage = await dictationMessageProvider.ReadLine("Eric", tkn);//GetNextMessageAsync(tkn);
             messageManager.AddMessage(userMessage);
             Console.WriteLine($"[Loop] Waiting for tool call message");
             var toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.GetChatCompletionRequestMessages(), tkn);
@@ -79,14 +76,14 @@ class Program
             Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCall(toolCallMessage, tkn);
             messageManager.AddMessages(toolMessages);
-
             var messagesToSpeak = toolMessages.Where(tm => string.IsNullOrEmpty(tm.Content) == false && tm.Role == Role.Assistant);
             foreach (var msg in messagesToSpeak)
             {
                 if (string.IsNullOrEmpty(msg.Content) == false)
                 {
                     Console.WriteLine($"[Loop] Waiting for Assistant to finish speaking.");
-                    await speechManager.Speak(msg.Content, tkn);
+                    bool isSpechToTextRunning = false;
+                    await speechManager.Speak(msg.Content, tkn, isSpechToTextRunning);
                 }
             }
         }
@@ -129,18 +126,14 @@ class Program
                     messages.Add(speakToolMessage);
                     break;
                 case "get_weather":
-                    var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(call, 47.5534058, -122.3093843, cancelToken);
+                    var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(call, Lat, Long, cancelToken);
                     messages.Add(weatherToolmessage);
                     var chatMessagesForGetWeather = messageManager.GetChatCompletionRequestMessages();
                     chatMessagesForGetWeather.AddRange(messages);
-                    chatMessagesForGetWeather.Last().Content += "\nUse fahrenheit units.";
+                    chatMessagesForGetWeather.Last().Content += "\nUse fahrenheit units.\n";
                     var weatherAssistantMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForGetWeather, cancelToken);
                     messages.Add(weatherAssistantMessage);
                     break;
-                /*case "wait_for_instructions":
-                    var waitToolMessage = await waitForInstructionsToolManager.WaitForInstructions(call, cancelToken);
-                    // TODO Add to message history
-                    break;*/
                 default:
                     // Handle unknown function
                     var unknownToolMessage = new Message {
