@@ -54,14 +54,14 @@ class Program
         messageManager.AddMessage(initialPromptMessage);
 
         var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(Lat, Long, tkn);
-        messageManager.AddMessage(new Message { Content = $"OpenWeatherMap current weather (report in Fehrenheit):\n\n{weatherToolmessage}", Role = Role.System});
+        initialPromptMessage.Content += $"\nOpenWeatherMap current weather (report in Fehrenheit):\n\n{weatherToolmessage}\n";
 
         var listToolMessage = await choreManager.List(tkn);
-        messageManager.AddMessage(new Message { Content = listToolMessage, Role = Role.System});
+        initialPromptMessage.Content += listToolMessage;
         
         // This message informs the assistant of stuff it needs to know as soon as it joins.
         var systemJoinMessage = new Message {
-            Content = $"You have just joined the meeting. The date is {DateTime.Now.ToString()}.\n In your 10-word opening message, you creatively hint or suggest that we have somehow interrupted, surprised, or caught you off guard. Briefly hit the most important bits of information, but don't forget a bit of levity.",
+            Content = $"You have just joined the meeting. The date is {DateTime.Now.ToString()}.\n In your short opening message, you creatively hint or suggest that we have somehow interrupted, surprised, or caught you off guard. Briefly hit the most important bits of information, but don't forget a bit of levity.",
             Role = Role.System
         };
         messageManager.Messages.Add(systemJoinMessage);
@@ -84,6 +84,7 @@ class Program
             messageManager.AddMessage(toolCallMessage);
             Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCall(toolCallMessage, tkn);
+            await messageManager.SaveAsync(tkn);
             var messagesToSpeak = toolMessages.Where(tm => string.IsNullOrEmpty(tm.Content) == false && tm.Role == Role.Assistant);
             foreach (var msg in messagesToSpeak)
             {

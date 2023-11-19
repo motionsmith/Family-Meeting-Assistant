@@ -93,13 +93,6 @@ public class OpenAIApi
                     Name = "get_weather",
                     Description = "Returns current local weather data from Open Weather Map API."
                 }
-            },
-            new Tool {
-                Function = new ToolFunction
-                {
-                    Name = "save_chat",
-                    Description = "Saves the chage messages to the family laptop. The messages will be reloaded to create context for you during the next family meeting."
-                }
             }
         };
 
@@ -107,6 +100,7 @@ public class OpenAIApi
         {
             chatCompletionPrompt = "\n\n[[ASSISTANT_NAME]]]s instructions for speaking:";
             chatCompletionPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that the family can hear you.";
+            chatCompletionPrompt += "\nDo not generate JSON to speak. Generate simple text to be spoken aloud.";
             chatCompletionPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
             chatCompletionPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
             chatCompletionPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
