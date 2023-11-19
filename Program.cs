@@ -57,7 +57,7 @@ class Program
         
         // This chunk will allow the Assistant to have the first message.
         var chatMessagesForOpening = messageManager.GetChatCompletionRequestMessages();
-        chatMessagesForOpening.Last().Content += "\nIn your opening message, you hit the most important bits of information but you still don't forget a bit of levity.";
+        chatMessagesForOpening.Last().Content += "\nIn your short opening message, you hit the most important bits of information but you still don't forget a bit of levity.";
         var openingMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForOpening, tkn);
         messageManager.AddMessage(openingMessage);
         if (string.IsNullOrEmpty(openingMessage.Content) == false)
@@ -112,6 +112,10 @@ class Program
                 case "complete_task":
                     var completeToolMessage = await choreManager.Complete(call, cancelToken);
                     messages.Add(completeToolMessage);
+                    var chatMessagesForCompleteTask = messageManager.GetChatCompletionRequestMessages();
+                    chatMessagesForCompleteTask.AddRange(messages);
+                    var completeTaskAssistantMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForCompleteTask, cancelToken);
+                    messages.Add(completeTaskAssistantMessage);
                     break;
                 case "list_tasks":
                     var listToolMessage = await choreManager.List(call, cancelToken);
