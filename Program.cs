@@ -38,6 +38,7 @@ class Program
         speechSynthesizer = new SpeechSynthesizer(speechConfig);
         dictationMessageProvider = new DictationMessageProvider(speechRecognizer);
         speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, assistantName);
+        await dictationMessageProvider.StartContinuousRecognitionAsync();
         messageManager = new MessageManager(ParseArguments("prompt", args), assistantName);
 
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
@@ -46,9 +47,16 @@ class Program
         };
 
         var tkn = new CancellationTokenSource().Token;
-        //await speechManager.Speak("Motionsmith", tkn);
+        //await speechManager.Speak("ET", tkn);
+
+        var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(Lat, Long, tkn);
+        messageManager.AddMessage(new Message { Content = $"OpenWeatherMap current weather:\n{weatherToolmessage}", Role = Role.System});
+
+        var listToolMessage = await choreManager.List(tkn);
+        messageManager.AddMessage(new Message { Content = listToolMessage, Role = Role.System});
         
         // This chunk will allow the Assistant to have the first message.
+        /*
         var chatMessagesForOpening = messageManager.GetChatCompletionRequestMessages();
         chatMessagesForOpening.Last().Content += "\nIn your opening message, you hit the most important bits of information but you still don't forget a bit of levity.";
         var openingMessage = await openAIApi.GetChatCompletionAsync(chatMessagesForOpening, tkn);
@@ -57,12 +65,9 @@ class Program
         {
             await speechManager.Speak(openingMessage.Content, tkn);
         }
+        */
         
-        var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(Lat, Long, tkn);
-        messageManager.AddMessage(new Message { Content = $"OpenWeatherMap current weather:\n{weatherToolmessage}", Role = Role.System});
-
         Console.WriteLine("Speak into your microphone.");
-
         while (true)
         {
             Console.WriteLine($"[Loop] Waiting for user message");

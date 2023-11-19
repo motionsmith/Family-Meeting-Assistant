@@ -59,13 +59,18 @@ public class ChoreManager
         };
     }
 
+    public async Task<string> List(CancellationToken cancelToken)
+    {
+        var choreList = PromptList;
+        return $"Family task list:\n{choreList}";
+    }
+
     public async Task<Message> List(ToolCall call, CancellationToken cancelToken)
     {
         var functionName = call.Function.Name;
         var arguments = call.Function.Arguments;
         var argsJObj = JObject.Parse(arguments);
-        var choreList = PromptList;
-        var listChoresContent = $"Chores:\n{choreList}";
+        var listChoresContent = await List(cancelToken);
         return new Message
         {
             Content = listChoresContent,
