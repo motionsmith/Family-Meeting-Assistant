@@ -1,5 +1,6 @@
 ﻿
 using Microsoft.CognitiveServices.Speech;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 public class SpeechManager
@@ -17,6 +18,18 @@ public class SpeechManager
 
     public async Task Speak(string message, CancellationToken cancelToken, bool autoPauseSpeechRecognizer = false)
     {
+        if (string.IsNullOrEmpty(message)) return;
+
+        try
+        {
+            var responseJson = JsonConvert.DeserializeObject<MalformedSpeechData>(message);
+            if (responseJson != null)
+            {
+                message = responseJson.Text;
+            }
+        }
+        catch(JsonReaderException) { /*The NORMAL case is that the message is not JSON and doesn't need to be serialized.*/}
+
         Console.Write($"{assistantName} Says ");
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine($"\"{message}\"");

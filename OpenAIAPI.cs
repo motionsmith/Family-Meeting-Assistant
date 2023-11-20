@@ -123,37 +123,37 @@ public class OpenAIApi
             }
         };
 
-        public OpenAIApi()
-        {
-            chatCompletionPrompt = "\n\n[[ASSISTANT_NAME]]]s instructions for speaking:";
-            chatCompletionPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that The Client can hear you.";
-            chatCompletionPrompt += "\nDo not generate JSON. Generate plain text to be spoken aloud.";
-            chatCompletionPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
-            chatCompletionPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
-            chatCompletionPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
-            chatCompletionPrompt += "\nSince you can only read the transcription, you can only use intuition to figure out who is speaking. Feel free to ask for clarification, but only when necessary, as this is an interruption.";
-            chatCompletionPrompt += "\nWhen speaking, be straightforward, not overly nice. You do not bother with passive comments like \"If you need anything, just let me know.\" or \"Is there anything else I can help you with?\"";
+    public OpenAIApi()
+    {
+        chatCompletionPrompt = "\n\n[[ASSISTANT_NAME]]]s instructions for speaking:";
+        chatCompletionPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that The Client can hear you.";
+        chatCompletionPrompt += "\nDo not generate JSON. Generate plain text to be spoken aloud.";
+        chatCompletionPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
+        chatCompletionPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
+        chatCompletionPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
+        chatCompletionPrompt += "\nSince you can only read the transcription, you can only use intuition to figure out who is speaking. Feel free to ask for clarification, but only when necessary, as this is an interruption.";
+        chatCompletionPrompt += "\nWhen speaking, be straightforward, not overly nice. You do not bother with passive comments like \"If you need anything, just let me know.\" or \"Is there anything else I can help you with?\"";
 
-            toolCallPrompt = "\n\n[[ASSISTANT_NAME]]'s instructions for function calling:";
-            toolCallPrompt += "\nYou always output JSON to call functions.";
-            toolCallPrompt += "\nThe JSON you output will be interpreted by the client and a function will be executed on your behalf.";
+        toolCallPrompt = "\n\n[[ASSISTANT_NAME]]'s instructions for function calling:";
+        toolCallPrompt += "\nYou always output JSON to call functions.";
+        toolCallPrompt += "\nThe JSON you output will be interpreted by the client and a function will be executed on your behalf.";
 
-            toolCallPrompt += "\n\n[[ASSISTANT_NAME]]]s instructions for calling the speak function:";
-            toolCallPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
-            toolCallPrompt += "\nIf you must vocalize, call the speak() function. This will cause the text content to be read (via text-to-speech) over the laptop speakers so that The Client can hear you.";
-            toolCallPrompt += "\nYou do not address people before they address you, unless you are speaking for some other approved reason.";
-            toolCallPrompt += "\nYou proactively reminds Clients of tasks due soon without being prompted.";
-            toolCallPrompt += "\nYou speak a response when someone addresses you as [[ASSISTANT_NAME]], but you are brief.";
-            toolCallPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
-            toolCallPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
-            toolCallPrompt += "\nIf someone thanks you, do not respond.";
-            toolCallPrompt += "\nThe Client does not want to hear from you too often or it will feel intrusive.";
-            toolCallPrompt += "\nSince you can only read the transcription, you can only use intuition to figure out who is speaking. Feel free to ask for clarification, but only when necessary, as this is an interruption.";
-            toolCallPrompt += "\nIf someone asks you a question, such as \"Hey [[ASSISTANT_NAME]], what are our current action items?\", then you may speak a response.";
-            toolCallPrompt += "\nWhen speaking, be straightforward, not overly nice. You do not bother with passive comments like \"If you need anything, just let me know.\" or \"Is there anything else I can help you with?\"";
-        }
+        toolCallPrompt += "\n\n[[ASSISTANT_NAME]]]s instructions for calling the speak function:";
+        toolCallPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
+        toolCallPrompt += "\nIf you must vocalize, call the speak() function. This will cause the text content to be read (via text-to-speech) over the laptop speakers so that The Client can hear you.";
+        toolCallPrompt += "\nYou do not address people before they address you, unless you are speaking for some other approved reason.";
+        toolCallPrompt += "\nYou proactively reminds Clients of tasks due soon without being prompted.";
+        toolCallPrompt += "\nYou speak a response when someone addresses you as [[ASSISTANT_NAME]], but you are brief.";
+        toolCallPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
+        toolCallPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
+        toolCallPrompt += "\nIf someone thanks you, do not respond.";
+        toolCallPrompt += "\nThe Client does not want to hear from you too often or it will feel intrusive.";
+        toolCallPrompt += "\nSince you can only read the transcription, you can only use intuition to figure out who is speaking. Feel free to ask for clarification, but only when necessary, as this is an interruption.";
+        toolCallPrompt += "\nIf someone asks you a question, such as \"Hey [[ASSISTANT_NAME]], what are our current action items?\", then you may speak a response.";
+        toolCallPrompt += "\nWhen speaking, be straightforward, not overly nice. You do not bother with passive comments like \"If you need anything, just let me know.\" or \"Is there anything else I can help you with?\"";
+    }
 
-    private async Task<Message> CompleteChatAsync(IEnumerable<Message> messages, CancellationToken cancelToken, ResponseFormat? responseFormat = null, List<Tool>? tools = null)
+    private async Task<OpenAIApiResponse> CompleteChatAsync(IEnumerable<Message> messages, CancellationToken cancelToken, ResponseFormat? responseFormat = null, List<Tool>? tools = null)
     {
         var next = new ChatCompletionRequest
         {
@@ -180,40 +180,38 @@ public class OpenAIApi
         };
 
         var response = await httpClient.SendAsync(request, cancelToken);
-            if (response.IsSuccessStatusCode)
-            {
-                var responseContent = await response.Content.ReadAsStringAsync();
-                var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
-                //Console.WriteLine(responseContent);
-                return responseContentObject.Choices[0].Message;
-            }
-            else
-            {
-                var failureResponseContent = await response.Content.ReadAsStringAsync();
+        if (response.IsSuccessStatusCode == false)
+        {
+            var failureResponseContent = await response.Content.ReadAsStringAsync();
 
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"OPENAI ERROR - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
-                Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
-                Console.ResetColor();
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"OPENAI ERROR - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
+            Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
+            Console.ResetColor();
+        }
 
-                return new Message
-                {
-                    Content = $"CompleteChat API request failed: {response.ReasonPhrase}",
-                    Role = Role.System
-                };
-            }
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
+        return responseContentObject;
     }
 
     public async Task<Message> GetToolCallAsync(List<Message> messages, CancellationToken tkn)
     {
         messages[0].Content += toolCallPrompt;
-        return await CompleteChatAsync(messages, tkn, new ResponseFormat {}, _tools);
+        var openAiResponse = await CompleteChatAsync(messages, tkn, new ResponseFormat { Type = "json_object" }, _tools);
+
+        foreach (var choice in openAiResponse.Choices)
+        {
+            Console.WriteLine($"DEBUG: Tool call finish reason {choice.FinishReason}");
+        }
+        return openAiResponse.Choices[0].Message;
     }
 
     public async Task<Message> GetChatCompletionAsync(List<Message> messages, CancellationToken tkn)
     {
         messages[0].Content += chatCompletionPrompt;
-        return await CompleteChatAsync(messages, tkn, null, null);
+        var openAiResponse = await CompleteChatAsync(messages, tkn, null, null);
+        return openAiResponse.Choices[0].Message;
     }
 }
 
@@ -452,4 +450,10 @@ public class OpenAiError
 
     [JsonProperty("type")]
     public string Type = string.Empty;
+}
+
+public class MalformedSpeechData
+{
+    [JsonProperty("text", Required = Required.Always)]
+    public string Text { get; set; }
 }
