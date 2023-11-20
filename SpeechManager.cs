@@ -1,4 +1,5 @@
 ﻿
+using System.Runtime.InteropServices.JavaScript;
 using Microsoft.CognitiveServices.Speech;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -28,7 +29,7 @@ public class SpeechManager
                 message = responseJson.Text;
             }
         }
-        catch(JsonReaderException) { /*The NORMAL case is that the message is not JSON and doesn't need to be serialized.*/}
+        catch(JSException) { /*The NORMAL case is that the message is not JSON and doesn't need to be serialized.*/}
 
         Console.Write($"{assistantName} Says ");
         Console.ForegroundColor = ConsoleColor.Green;
