@@ -107,9 +107,9 @@ public class OpenAIApi
             chatCompletionPrompt += "\nSince you can only read the transcription, you can only use intuition to figure out who is speaking. Feel free to ask for clarification, but only when necessary, as this is an interruption.";
             chatCompletionPrompt += "\nWhen speaking, be straightforward, not overly nice. You do not bother with passive comments like \"If you need anything, just let me know.\" or \"Is there anything else I can help you with?\"";
 
-            toolCallPrompt = "\n\n[[ASSISTANT_NAME]]'s instructions for function calling:";
-            toolCallPrompt += "\nYou always output JSON to call functions.";
-            toolCallPrompt += "\nThe JSON you output will be interpreted by the client and a function will be executed on your behalf.";
+        toolCallPrompt = "\n\n[[ASSISTANT_NAME]]'s instructions for function calling:";
+        toolCallPrompt += "\nYou always output JSON to call functions.";
+        toolCallPrompt += "\nThe JSON you output will be interpreted by the client and a function will be executed on your behalf.";
 
             toolCallPrompt += "\n\n[[ASSISTANT_NAME]]]s instructions for calling the speak function:";
             toolCallPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
@@ -126,7 +126,7 @@ public class OpenAIApi
             toolCallPrompt += "\nWhen speaking, be straightforward, not overly nice. You do not bother with passive comments like \"If you need anything, just let me know.\" or \"Is there anything else I can help you with?\"";
         }
 
-    private async Task<Message> CompleteChatAsync(IEnumerable<Message> messages, CancellationToken cancelToken, ResponseFormat? responseFormat = null, List<Tool>? tools = null)
+    private async Task<OpenAIApiResponse> CompleteChatAsync(IEnumerable<Message> messages, CancellationToken cancelToken, ResponseFormat? responseFormat = null, List<Tool>? tools = null)
     {
         var next = new ChatCompletionRequest
         {
@@ -153,40 +153,38 @@ public class OpenAIApi
         };
 
         var response = await httpClient.SendAsync(request, cancelToken);
-            if (response.IsSuccessStatusCode)
-            {
-                var responseContent = await response.Content.ReadAsStringAsync();
-                var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
-                //Console.WriteLine(responseContent);
-                return responseContentObject.Choices[0].Message;
-            }
-            else
-            {
-                var failureResponseContent = await response.Content.ReadAsStringAsync();
+        if (response.IsSuccessStatusCode == false)
+        {
+            var failureResponseContent = await response.Content.ReadAsStringAsync();
 
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"OPENAI ERROR - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
-                Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
-                Console.ResetColor();
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"OPENAI ERROR - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
+            Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
+            Console.ResetColor();
+        }
 
-                return new Message
-                {
-                    Content = $"CompleteChat API request failed: {response.ReasonPhrase}",
-                    Role = Role.System
-                };
-            }
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
+        return responseContentObject;
     }
 
     public async Task<Message> GetToolCallAsync(List<Message> messages, CancellationToken tkn)
     {
         messages[0].Content += toolCallPrompt;
-        return await CompleteChatAsync(messages, tkn, new ResponseFormat {}, _tools);
+        var openAiResponse = await CompleteChatAsync(messages, tkn, new ResponseFormat { Type = "json_object" }, _tools);
+
+        foreach (var choice in openAiResponse.Choices)
+        {
+            Console.WriteLine($"DEBUG: Tool call finish reason {choice.FinishReason}");
+        }
+        return openAiResponse.Choices[0].Message;
     }
 
     public async Task<Message> GetChatCompletionAsync(List<Message> messages, CancellationToken tkn)
     {
         messages[0].Content += chatCompletionPrompt;
-        return await CompleteChatAsync(messages, tkn, null, null);
+        var openAiResponse = await CompleteChatAsync(messages, tkn, null, null);
+        return openAiResponse.Choices[0].Message;
     }
 }
 
@@ -425,4 +423,10 @@ public class OpenAiError
 
     [JsonProperty("type")]
     public string Type = string.Empty;
+}
+
+public class MalformedSpeechData
+{
+    [JsonProperty("text", Required = Required.Always)]
+    public string Text { get; set; }
 }

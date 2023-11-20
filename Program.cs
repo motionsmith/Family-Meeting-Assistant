@@ -1,6 +1,8 @@
 ﻿using System.Diagnostics;
+using System.Reflection.Metadata;
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 class Program
@@ -21,6 +23,8 @@ class Program
     private static SpeechManager? speechManager;
     private static SpeechRecognizer? speechRecognizer;
     private static OpenWeatherMapClient? openWeatherMapClient;
+    private static Room1 room1 = new Room1();
+    private static bool IS_SPEECH_TO_TEXT_WORKING = false;
 
     public static double Lat = 47.5534058;
     public static double Long = -122.3093843;
@@ -91,19 +95,25 @@ class Program
             //Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCalls(toolCallMessage, tkn);
             await messageManager.SaveAsync(tkn);
+
             var toolCallsRequireFollowUp = toolMessages.Any(msg => msg.Role == Role.Tool && msg.FollowUp);
             if (toolCallsRequireFollowUp)
             {
                 var toolCallAssistantResponseMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, tkn);
                 messageManager.AddMessage(toolCallAssistantResponseMessage);
-                bool isSpechToTextRunning = false;
-                await speechManager.Speak(toolCallAssistantResponseMessage.Content, tkn, isSpechToTextRunning);
+                await speechManager.Speak(toolCallAssistantResponseMessage.Content, tkn, IS_SPEECH_TO_TEXT_WORKING);
             }
         }
     }
 
     private static async Task<IEnumerable<Message>> HandleToolCalls(Message message, CancellationToken cancelToken)
     {
+        if (string.IsNullOrEmpty(message.Content) == false)
+        {
+            Console.WriteLine($"DEBUG WARNING: Speaking malformed OpenAI tool call");
+            await speechManager.Speak(message.Content, cancelToken, IS_SPEECH_TO_TEXT_WORKING);
+        }
+        
         if (message.ToolCalls == null || message.ToolCalls.Count == 0)
         {
             return new List<Message>();
