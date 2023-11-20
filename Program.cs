@@ -89,22 +89,20 @@ class Program
             var toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.ChatCompletionRequestMessages, tkn);
             messageManager.AddMessage(toolCallMessage);
             //Console.WriteLine($"[Loop] Waiting for tool messages");
-            var toolMessages = await HandleToolCall(toolCallMessage, tkn);
+            var toolMessages = await HandleToolCalls(toolCallMessage, tkn);
             await messageManager.SaveAsync(tkn);
-            var messagesToSpeak = toolMessages.Where(tm => string.IsNullOrEmpty(tm.Content) == false && tm.Role == Role.Assistant);
-            foreach (var msg in messagesToSpeak)
+            var toolCallsRequireFollowUp = toolMessages.Any(msg => msg.Role == Role.Tool && msg.FollowUp);
+            if (toolCallsRequireFollowUp)
             {
-                if (string.IsNullOrEmpty(msg.Content) == false)
-                {
-                    //Console.WriteLine($"[Loop] Waiting for Assistant to finish speaking.");
-                    bool isSpechToTextRunning = false;
-                    await speechManager.Speak(msg.Content, tkn, isSpechToTextRunning);
-                }
+                var toolCallAssistantResponseMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, tkn);
+                messageManager.AddMessage(toolCallAssistantResponseMessage);
+                bool isSpechToTextRunning = false;
+                await speechManager.Speak(toolCallAssistantResponseMessage.Content, tkn, isSpechToTextRunning);
             }
         }
     }
 
-    private static async Task<IEnumerable<Message>> HandleToolCall(Message message, CancellationToken cancelToken)
+    private static async Task<IEnumerable<Message>> HandleToolCalls(Message message, CancellationToken cancelToken)
     {
         if (message.ToolCalls == null || message.ToolCalls.Count == 0)
         {
@@ -127,33 +125,33 @@ class Program
                     break;
                 case "complete_task":
                     var completeToolMessage = await choreManager.Complete(call, cancelToken);
+                    completeToolMessage.FollowUp = true; // Ask assistant to follow up after this tool call.
                     messages.Add(completeToolMessage);
                     messageManager.AddMessage(completeToolMessage);
-                    var completeTaskAssistantMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, cancelToken);
+                    /*var completeTaskAssistantMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, cancelToken);
                     messages.Add(completeTaskAssistantMessage);
-                    messageManager.AddMessage(completeTaskAssistantMessage);
+                    messageManager.AddMessage(completeTaskAssistantMessage);*/
                     break;
                 case "list_tasks":
                     var listToolMessage = await choreManager.List(call, cancelToken);
+                    listToolMessage.FollowUp = true; // Ask Assistant to follow up after this tool call.
                     messages.Add(listToolMessage);
                     messageManager.AddMessage(listToolMessage);
-                    var listAssistantMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, cancelToken);
+                    /*var listAssistantMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, cancelToken);
                     messages.Add(listAssistantMessage);
-                    messageManager.AddMessage(listAssistantMessage);
+                    messageManager.AddMessage(listAssistantMessage);*/
                     break;
                 case "speak":
                     var speakToolMessage = await speechManager.SpeakFromToolCall(call, cancelToken);
                     messages.Add(speakToolMessage);
                     messageManager.AddMessage(speakToolMessage);
                     break;
-                case "get_weather":
+                case "get_current_local_weather":
                     var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(call, Lat, Long, cancelToken);
+                    weatherToolmessage.FollowUp = true; // Ask the Assistant to follow up on this tool call.
                     messages.Add(weatherToolmessage);
                     messageManager.AddMessage(weatherToolmessage);
                     messageManager.ChatCompletionRequestMessages.Last().Content += "\nUse fahrenheit units.\n";
-                    var weatherAssistantMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, cancelToken);
-                    messages.Add(weatherAssistantMessage);
-                    messageManager.AddMessage(weatherAssistantMessage);
                     break;
                 case "save_chat":
                     var saveToolMessage = new Message {

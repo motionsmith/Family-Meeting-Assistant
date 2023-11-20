@@ -90,7 +90,7 @@ public class OpenAIApi
             new Tool {
                 Function = new ToolFunction
                 {
-                    Name = "get_weather",
+                    Name = "get_current_local_weather",
                     Description = "Returns current local weather data from Open Weather Map API."
                 }
             }
@@ -242,7 +242,8 @@ public class Message
     [EnumDataType(typeof(Role), ErrorMessage = "Invalid role.")]
     public Role Role { get; set; }  // Enum type to enforce valid values
 
-
+    [JsonIgnore]
+    public bool FollowUp { get; set; }
 }
 
 [JsonConverter(typeof(StringEnumConverter))]
