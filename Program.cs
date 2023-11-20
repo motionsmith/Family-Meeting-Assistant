@@ -23,7 +23,6 @@ class Program
     private static SpeechManager? speechManager;
     private static SpeechRecognizer? speechRecognizer;
     private static OpenWeatherMapClient? openWeatherMapClient;
-    private static Room1 room1 = new Room1();
     private static bool IS_SPEECH_TO_TEXT_WORKING = false;
 
     public static double Lat = 47.5534058;
