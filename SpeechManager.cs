@@ -28,7 +28,7 @@ public class SpeechManager
                 message = responseJson.Text;
             }
         }
-        catch(JsonReaderException) { /*The NORMAL case is that the message is not JSON and doesn't need to be serialized.*/}
+        catch(JsonException) { /*The NORMAL case is that the message is not JSON and doesn't need to be serialized.*/}
 
         Console.Write($"{assistantName} Says ");
         Console.ForegroundColor = ConsoleColor.Green;

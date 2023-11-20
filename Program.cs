@@ -163,13 +163,13 @@ class Program
                     messageManager.AddMessage(weatherToolmessage);
                     messageManager.ChatCompletionRequestMessages.Last().Content += "\nUse fahrenheit units.\n";
                     break;
-                case "turn_door_handle":
-                    var turnHandleMessage = await room1.TurnDoorHandle(call, cancelToken);
+                case "press_button":
+                    var turnHandleMessage = await room1.PressButton(call, cancelToken);
                     messageManager.AddMessage(turnHandleMessage);
                     messages.Add(turnHandleMessage);
                     break;
-                case "turn_compass_dial":
-                    var turnCompassMessage = await room1.TurnCompassDial(call, cancelToken);
+                case "turn_dial":
+                    var turnCompassMessage = await room1.TurnDial(call, cancelToken);
                     messageManager.AddMessage(turnCompassMessage);
                     messages.Add(turnCompassMessage);
                     break;

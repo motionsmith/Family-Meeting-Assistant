@@ -97,15 +97,15 @@ public class OpenAIApi
             new Tool {
                 Function = new ToolFunction
                 {
-                    Name = "turn_door_handle",
-                    Description = "Turns the handle on the door in the container, seemly to open the door?"
+                    Name = "press_button",
+                    Description = "Presses the big button on the panel in the container, seemingly to orient or initiate something?"
                 }
             },
             new Tool {
                 Function = new ToolFunction
                 {
-                    Name = "turn_compass_dial",
-                    Description = "Controls the needle on a dial that looks like a compass. You can control which magnetic direction it is facing in clockwise degrees from North. 90 degrees points East, 180 points South, 270 points West.",
+                    Name = "turn_dial",
+                    Description = "Controls the direction that the dial with the green arrrow is facing.",
                     Parameters = new ToolFunctionParameters
                     {
                         Properties = new Dictionary<string, ToolFunctionParameterProperty> {
@@ -113,7 +113,7 @@ public class OpenAIApi
                                 "orientation", new ToolFunctionParameterProperty
                                 {
                                     Type = "number",
-                                    Description = "Determines the direction the dial needle is facing, increasing clockwise starting at North. Units are in degrees."
+                                    Description = "Determines the direction the arrow on the dial is facing. An orientation of 0 degrees indicates the arrow faces up. Turning clockwise increases the orientation value. (0-360)"
                                 }
                             }
                         },
@@ -189,9 +189,17 @@ public class OpenAIApi
             Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
             Console.ResetColor();
         }
-
         var responseContent = await response.Content.ReadAsStringAsync();
         var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
+
+        if (response.IsSuccessStatusCode && next.Tools != null && next.Tools.Count > 0 && responseContentObject.Choices[0].FinishReason != FinishReason.ToolCalls)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Malformed tool call from OPENAI. Response dump is below.");
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine(responseContent);
+            Console.ResetColor();
+        }
         return responseContentObject;
     }
 
@@ -202,7 +210,10 @@ public class OpenAIApi
 
         foreach (var choice in openAiResponse.Choices)
         {
-            Console.WriteLine($"DEBUG: Tool call finish reason {choice.FinishReason}");
+            if (choice.FinishReason != FinishReason.ToolCalls)
+            {
+                Console.WriteLine($"DEBUG WARNING: Tool call finish reason {choice.FinishReason}");
+            }
         }
         return openAiResponse.Choices[0].Message;
     }
