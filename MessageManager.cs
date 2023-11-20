@@ -42,7 +42,7 @@ public class MessageManager
 
     public async Task SaveAsync(CancellationToken cancelToken)
     {
-        var messagesToSave = Messages.Skip(1).TakeLast(128).ToList();
+        var messagesToSave = Messages.Skip(1).TakeLast(128).SkipWhile(msg => msg.ToolCalls != null || msg.Role == Role.Tool).ToList();
         
         var messageHistory = new MessageHistory {
             Messages = messagesToSave

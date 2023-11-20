@@ -85,10 +85,10 @@ class Program
             Console.WriteLine($"[Loop] Waiting for user message");
             var userMessage = await dictationMessageProvider.ReadLine("Eric", tkn);//GetNextMessageAsync(tkn);
             messageManager.AddMessage(userMessage);
-            Console.WriteLine($"[Loop] Waiting for tool call message");
+            //Console.WriteLine($"[Loop] Waiting for tool call message");
             var toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.ChatCompletionRequestMessages, tkn);
             messageManager.AddMessage(toolCallMessage);
-            Console.WriteLine($"[Loop] Waiting for tool messages");
+            //Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCall(toolCallMessage, tkn);
             await messageManager.SaveAsync(tkn);
             var messagesToSpeak = toolMessages.Where(tm => string.IsNullOrEmpty(tm.Content) == false && tm.Role == Role.Assistant);
@@ -96,7 +96,7 @@ class Program
             {
                 if (string.IsNullOrEmpty(msg.Content) == false)
                 {
-                    Console.WriteLine($"[Loop] Waiting for Assistant to finish speaking.");
+                    //Console.WriteLine($"[Loop] Waiting for Assistant to finish speaking.");
                     bool isSpechToTextRunning = false;
                     await speechManager.Speak(msg.Content, tkn, isSpechToTextRunning);
                 }
