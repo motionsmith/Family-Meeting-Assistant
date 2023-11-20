@@ -62,7 +62,7 @@ public class ChoreManager
     public async Task<string> List(CancellationToken cancelToken)
     {
         var choreList = PromptList;
-        return $"Family task list:\n{choreList}";
+        return $"Client task list:\n{choreList}";
     }
 
     public async Task<Message> List(ToolCall call, CancellationToken cancelToken)

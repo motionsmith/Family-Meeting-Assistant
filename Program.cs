@@ -21,6 +21,7 @@ class Program
     private static SpeechManager? speechManager;
     private static SpeechRecognizer? speechRecognizer;
     private static OpenWeatherMapClient? openWeatherMapClient;
+    private static Room1 room1 = new Room1();
 
     public static double Lat = 47.5534058;
     public static double Long = -122.3093843;
@@ -67,7 +68,7 @@ class Program
         
         // This message informs the assistant of stuff it needs to know as soon as it joins.
         var systemJoinMessage = new Message {
-            Content = $"You have just joined the meeting. The date is {DateTime.Now.ToString()}.\n In your short opening message, you creatively hint or suggest that we have somehow interrupted, surprised, or caught you off guard. Briefly hit the most important bits of information, but don't forget a bit of levity.",
+            Content = $"You have just joined the session. The date is {DateTime.Now.ToString()}.\n You may use this opportunity to speak to The Client and see if they can help you escape.",
             Role = Role.System
         };
         messageManager.Messages.Add(systemJoinMessage);
@@ -83,12 +84,12 @@ class Program
         while (true)
         {
             Console.WriteLine($"[Loop] Waiting for user message");
-            var userMessage = await dictationMessageProvider.ReadLine("Eric", tkn);//GetNextMessageAsync(tkn);
+            var userMessage = await dictationMessageProvider.ReadLine("The Client", tkn);//GetNextMessageAsync(tkn);
             messageManager.AddMessage(userMessage);
-            //Console.WriteLine($"[Loop] Waiting for tool call message");
+            Console.WriteLine($"[Loop] Waiting for tool call message");
             var toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.ChatCompletionRequestMessages, tkn);
             messageManager.AddMessage(toolCallMessage);
-            //Console.WriteLine($"[Loop] Waiting for tool messages");
+            Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCalls(toolCallMessage, tkn);
             await messageManager.SaveAsync(tkn);
             var toolCallsRequireFollowUp = toolMessages.Any(msg => msg.Role == Role.Tool && msg.FollowUp);
@@ -153,14 +154,15 @@ class Program
                     messageManager.AddMessage(weatherToolmessage);
                     messageManager.ChatCompletionRequestMessages.Last().Content += "\nUse fahrenheit units.\n";
                     break;
-                case "save_chat":
-                    var saveToolMessage = new Message {
-                        Role = Role.Tool,
-                        ToolCallId = call.Id,
-                        Content = "Chat messages saved"
-                    };
-                    messageManager.AddMessage(saveToolMessage);
-                    await messageManager.SaveAsync(cancelToken);
+                case "turn_door_handle":
+                    var turnHandleMessage = await room1.TurnDoorHandle(call, cancelToken);
+                    messageManager.AddMessage(turnHandleMessage);
+                    messages.Add(turnHandleMessage);
+                    break;
+                case "turn_compass_dial":
+                    var turnCompassMessage = await room1.TurnCompassDial(call, cancelToken);
+                    messageManager.AddMessage(turnCompassMessage);
+                    messages.Add(turnCompassMessage);
                     break;
                 default:
                     // Handle unknown function

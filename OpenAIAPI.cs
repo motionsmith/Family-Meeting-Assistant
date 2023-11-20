@@ -20,14 +20,14 @@ public class OpenAIApi
             new Tool {
                 Function = new ToolFunction {
                     Name = "file_task",
-                    Description = "Adds a task to the family task list. Replaces tasks with the same title.",
+                    Description = "Adds a task to the Client task list. Replaces tasks with the same title.",
                     Parameters = new ToolFunctionParameters {
                         Properties = new Dictionary<string, ToolFunctionParameterProperty> {
                             {
                                 "title", new ToolFunctionParameterProperty
                                 {
                                     Type = "string",
-                                    Description = "A short description that helps the family members remember what needs to be done to complete this task."
+                                    Description = "A short description that helps the Client remember what needs to be done to complete this task."
                                 }
                             },
                             {
@@ -46,13 +46,13 @@ public class OpenAIApi
                 Function = new ToolFunction
                 {
                     Name = "list_tasks",
-                    Description = "Lists the tasks in the family task list."
+                    Description = "Lists the tasks in the Client's task list."
                 }
             },
             new Tool {
                 Function = new ToolFunction {
                     Name = "complete_task",
-                    Description = "Removes a task from the family task list.",
+                    Description = "Removes a task from the Client's task list.",
                     Parameters = new ToolFunctionParameters {
                         Properties = new Dictionary<string, ToolFunctionParameterProperty> {
                             {
@@ -93,14 +93,41 @@ public class OpenAIApi
                     Name = "get_current_local_weather",
                     Description = "Returns current local weather data from Open Weather Map API."
                 }
+            },
+            new Tool {
+                Function = new ToolFunction
+                {
+                    Name = "turn_door_handle",
+                    Description = "Turns the handle on the door in the container, seemly to open the door?"
+                }
+            },
+            new Tool {
+                Function = new ToolFunction
+                {
+                    Name = "turn_compass_dial",
+                    Description = "Controls the needle on a dial that looks like a compass. You can control which magnetic direction it is facing in clockwise degrees from North. 90 degrees points East, 180 points South, 270 points West.",
+                    Parameters = new ToolFunctionParameters
+                    {
+                        Properties = new Dictionary<string, ToolFunctionParameterProperty> {
+                            {
+                                "orientation", new ToolFunctionParameterProperty
+                                {
+                                    Type = "number",
+                                    Description = "Determines the direction the dial needle is facing, increasing clockwise starting at North. Units are in degrees."
+                                }
+                            }
+                        },
+                        Required = new List<string> { "orientation" }
+                    }
+                }
             }
         };
 
         public OpenAIApi()
         {
             chatCompletionPrompt = "\n\n[[ASSISTANT_NAME]]]s instructions for speaking:";
-            chatCompletionPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that the family can hear you.";
-            chatCompletionPrompt += "\nDo not generate JSON to speak. Generate simple text to be spoken aloud.";
+            chatCompletionPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that The Client can hear you.";
+            chatCompletionPrompt += "\nDo not generate JSON. Generate plain text to be spoken aloud.";
             chatCompletionPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
             chatCompletionPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
             chatCompletionPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
@@ -113,14 +140,14 @@ public class OpenAIApi
 
             toolCallPrompt += "\n\n[[ASSISTANT_NAME]]]s instructions for calling the speak function:";
             toolCallPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
-            toolCallPrompt += "\nIf you must vocalize, call the speak() function. This will cause the text content to be read (via text-to-speech) over the laptop speakers so that the family can hear you.";
+            toolCallPrompt += "\nIf you must vocalize, call the speak() function. This will cause the text content to be read (via text-to-speech) over the laptop speakers so that The Client can hear you.";
             toolCallPrompt += "\nYou do not address people before they address you, unless you are speaking for some other approved reason.";
-            toolCallPrompt += "\nYou proactively reminds family members of tasks due soon without being prompted.";
+            toolCallPrompt += "\nYou proactively reminds Clients of tasks due soon without being prompted.";
             toolCallPrompt += "\nYou speak a response when someone addresses you as [[ASSISTANT_NAME]], but you are brief.";
             toolCallPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
             toolCallPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
             toolCallPrompt += "\nIf someone thanks you, do not respond.";
-            toolCallPrompt += "\nEric and Meadow do not want to hear from you too often or it will feel intrusive.";
+            toolCallPrompt += "\nThe Client does not want to hear from you too often or it will feel intrusive.";
             toolCallPrompt += "\nSince you can only read the transcription, you can only use intuition to figure out who is speaking. Feel free to ask for clarification, but only when necessary, as this is an interruption.";
             toolCallPrompt += "\nIf someone asks you a question, such as \"Hey [[ASSISTANT_NAME]], what are our current action items?\", then you may speak a response.";
             toolCallPrompt += "\nWhen speaking, be straightforward, not overly nice. You do not bother with passive comments like \"If you need anything, just let me know.\" or \"Is there anything else I can help you with?\"";
