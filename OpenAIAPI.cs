@@ -181,11 +181,6 @@ public class OpenAIApi
     {
         messages[0].Content += toolCallPrompt;
         var openAiResponse = await CompleteChatAsync(messages, tkn, new ResponseFormat { Type = "json_object" }, _tools);
-
-        foreach (var choice in openAiResponse.Choices)
-        {
-            Console.WriteLine($"DEBUG: Tool call finish reason {choice.FinishReason}");
-        }
         return openAiResponse.Choices[0].Message;
     }
 
