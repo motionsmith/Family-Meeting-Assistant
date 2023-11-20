@@ -169,9 +169,10 @@ public class OpenAIApi
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"OpenAI request failed: {requestJson}");
             return new Message
             {
-                Content = $"OpenAI request failed: {ex} {ex.Message} {requestJson}",
+                Content = $"OpenAI request failed: {ex} {ex.Message}",
                 Role = Role.System
             };
         }

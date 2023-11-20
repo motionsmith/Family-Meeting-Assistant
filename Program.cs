@@ -50,9 +50,15 @@ class Program
         await messageManager.LoadAsync(tkn);
         //await speechManager.Speak("ET", tkn);
 
-        var initialPromptMessage = await messageManager.CreateInitialSystemPrompt(tkn);
-        messageManager.AddMessage(initialPromptMessage);
+        if (messageManager.Messages.Count == 0)
+        {
+            var x = await messageManager.CreateInitialSystemPrompt(tkn);
+            messageManager.AddMessage(x);
+        }
 
+        var initialPromptMessage = new Message {
+            Role = Role.System
+        };
         var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(Lat, Long, tkn);
         initialPromptMessage.Content += $"\nOpenWeatherMap current weather (report in Fehrenheit):\n\n{weatherToolmessage}\n";
 
