@@ -165,6 +165,15 @@ public class OpenAIApi
 
         var responseContent = await response.Content.ReadAsStringAsync();
         var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
+
+        if (response.IsSuccessStatusCode && next.Tools != null && next.Tools.Count > 0 && responseContentObject.Choices[0].FinishReason != FinishReason.ToolCalls)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Malformed tool call from OPENAI. Response dump is below.");
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine(responseContent);
+            Console.ResetColor();
+        }
         return responseContentObject;
     }
 
