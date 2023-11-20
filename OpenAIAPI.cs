@@ -179,30 +179,29 @@ public class OpenAIApi
             }
         };
 
-        try
-        {
-            var response = await httpClient.SendAsync(request, cancelToken);
-            if (response.IsSuccessStatusCode == false)
+        var response = await httpClient.SendAsync(request, cancelToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
+                //Console.WriteLine(responseContent);
+                return responseContentObject.Choices[0].Message;
+            }
+            else
             {
                 var failureResponseContent = await response.Content.ReadAsStringAsync();
+
+                Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine($"OPENAI ERROR - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
                 Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
-            }
+                Console.ResetColor();
 
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
-            //Console.WriteLine(responseContent);
-            return responseContentObject.Choices[0].Message;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"OpenAI request failed: {requestJson}");
-            return new Message
-            {
-                Content = $"OpenAI request failed: {ex} {ex.Message}",
-                Role = Role.System
-            };
-        }
+                return new Message
+                {
+                    Content = $"CompleteChat API request failed: {response.ReasonPhrase}",
+                    Role = Role.System
+                };
+            }
     }
 
     public async Task<Message> GetToolCallAsync(List<Message> messages, CancellationToken tkn)
