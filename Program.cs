@@ -89,8 +89,22 @@ class Program
             var userMessage = await dictationMessageProvider.ReadLine("Eric", tkn);//GetNextMessageAsync(tkn);
             messageManager.AddMessage(userMessage);
             //Console.WriteLine($"[Loop] Waiting for tool call message");
-            var toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.ChatCompletionRequestMessages, tkn);
-            messageManager.AddMessage(toolCallMessage);
+            Message toolCallMessage;
+            try
+            {
+                toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.ChatCompletionRequestMessages, tkn);
+                
+            }
+            catch (TimeoutException)
+            {
+                toolCallMessage = new Message
+                {
+                    Role = Role.System,
+                    Content = "Network Timeout - Try again"
+                };
+            }
+            messageManager.AddMessage(toolCallMessage);   
+            
             //Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCalls(toolCallMessage, tkn);
             await messageManager.SaveAsync(tkn);
