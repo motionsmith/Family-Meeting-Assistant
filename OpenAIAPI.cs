@@ -125,6 +125,8 @@ public class OpenAIApi
 
     public OpenAIApi()
     {
+        httpClient.Timeout = TimeSpan.FromSeconds(15);
+        
         chatCompletionPrompt = "\n\n[[ASSISTANT_NAME]]]s instructions for speaking:";
         chatCompletionPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that The Client can hear you.";
         chatCompletionPrompt += "\nDo not generate JSON. Generate plain text to be spoken aloud.";
@@ -178,7 +180,7 @@ public class OpenAIApi
                 { "OpenAI-Organization", openAIOrg }
             }
         };
-
+        
         var response = await httpClient.SendAsync(request, cancelToken);
         if (response.IsSuccessStatusCode == false)
         {

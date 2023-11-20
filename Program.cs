@@ -51,6 +51,7 @@ class Program
         };
 
         var tkn = new CancellationTokenSource().Token;
+        await room1.LoadAsync(tkn);
         await messageManager.LoadAsync(tkn);
         //await speechManager.Speak("ET", tkn);
 
@@ -89,9 +90,24 @@ class Program
             Console.WriteLine($"[Loop] Waiting for user message");
             var userMessage = await dictationMessageProvider.ReadLine("The Client", tkn);//GetNextMessageAsync(tkn);
             messageManager.AddMessage(userMessage);
+            
             Console.WriteLine($"[Loop] Waiting for tool call message");
-            var toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.ChatCompletionRequestMessages, tkn);
-            messageManager.AddMessage(toolCallMessage);
+            Message toolCallMessage;
+            try
+            {
+                toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.ChatCompletionRequestMessages, tkn);
+                
+            }
+            catch (TimeoutException timeout)
+            {
+                toolCallMessage = new Message
+                {
+                    Role = Role.System,
+                    Content = "Network Timeout - Try again"
+                };
+            }
+            messageManager.AddMessage(toolCallMessage);   
+            
             Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCalls(toolCallMessage, tkn);
             await messageManager.SaveAsync(tkn);
@@ -108,7 +124,7 @@ class Program
 
     private static async Task<IEnumerable<Message>> HandleToolCalls(Message message, CancellationToken cancelToken)
     {
-        if (string.IsNullOrEmpty(message.Content) == false)
+        if (string.IsNullOrEmpty(message.Content) == false && (message.ToolCalls == null || message.ToolCalls.Count == 0))
         {
             Console.WriteLine($"DEBUG WARNING: Speaking malformed OpenAI tool call");
             await speechManager.Speak(message.Content, cancelToken, IS_SPEECH_TO_TEXT_WORKING);

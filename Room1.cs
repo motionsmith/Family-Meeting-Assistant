@@ -14,10 +14,10 @@ public class Room1
         };
         if (isSequenceInitiated == false && tries > 0)
         {
-            if (dialOrientation > 70 && dialOrientation < 110)
+            if (dialOrientation > 247.5f && dialOrientation < 292.5f)
             {
                 isSequenceInitiated = true;
-                message.Content = "The button clicks satisfyingly. You hear a ding.!";
+                message.Content = "The button clicks satisfyingly. You hear a ding!";
             }
             else
             {
@@ -33,6 +33,7 @@ public class Room1
         {
             message.Content = $"You hear a loud buzzing sound, and a robotic voice says \"Game over\". You cannot escape. You are depressed and refuse to be helpful.";
         }
+        await SaveAsync(cancelToken);
         return message;
     }
 
@@ -43,6 +44,7 @@ public class Room1
         var argsJObj = JObject.Parse(arguments);
         dialOrientation = (float)argsJObj["orientation"];
         dialOrientation = dialOrientation % 360;
+        await SaveAsync(cancelToken);
         return new Message {
             Role = Role.Tool,
             ToolCallId = call.Id,
@@ -92,35 +94,63 @@ public class Room1
     {
         if (dialOrientation > 337.5f || dialOrientation < 22.5f)
         {
-            return "East";//"up";
+            return "North";//"up";
         }
         if (dialOrientation >= 22.5 && dialOrientation < 67.5f)
         {
-            return "Northeast";//"up and right";
+            return "Northwest";//"up and right";
         }
         else if (dialOrientation >= 67.5f && dialOrientation < 112.5f)
         {
-            return "North";
+            return "West";
         }
         else if (dialOrientation >= 112.5f && dialOrientation < 157.5f)
         {
-            return "Northwest";
+            return "Southwest";
         }
         else if (dialOrientation >= 157.5f && dialOrientation < 202.5f)
         {
-            return "West";
+            return "South";
         }
         else if (dialOrientation >= 202.5f && dialOrientation < 247.5f)
         {
-            return "Southwest";
+            return "Southeast";
         }
         else if (dialOrientation >= 247.5f && dialOrientation < 292.5f)
         {
-            return "South";
+            return "East";
         }
         else
         {
-            return "Southeast";
+            return "Northeast";
         }
+    }
+
+    private async Task SaveAsync(CancellationToken cancelToken)
+    {
+        var filePath = GetFilePath();
+        string contents = $"{isSequenceInitiated},{tries},{dialOrientation}";
+        await File.WriteAllTextAsync(filePath, contents, cancelToken);
+    }
+
+    public async Task LoadAsync(CancellationToken cancelToken)
+    {
+        var filePath = GetFilePath();
+        if (File.Exists(filePath) == false)
+        {
+            await SaveAsync(cancelToken);
+        }
+        var fileContents = await File.ReadAllTextAsync(filePath, cancelToken);
+        var vals = fileContents.Split(',');
+        isSequenceInitiated = bool.Parse(vals[0]);
+        tries = int.Parse(vals[1]);
+        dialOrientation = float.Parse(vals[2]);
+    }
+
+    private string GetFilePath()
+    {
+        var appDataDirPath = Environment.SpecialFolder.ApplicationData.ToString();
+        string appDataFullPath = Path.GetFullPath(appDataDirPath);
+        return Path.Combine(appDataFullPath, "room1.txt");
     }
 }
