@@ -72,7 +72,7 @@ class Program
         
         // This message informs the assistant of stuff it needs to know as soon as it joins.
         var systemJoinMessage = new Message {
-            Content = $"You have just joined the session. The date is {DateTime.Now.ToString()}.\n You may use this opportunity to speak to The Client and see if they can help you escape.",
+            Content = $"You have just joined the session. The date is {DateTime.Now.ToString()}. {assistantName} desperately uses this opportunity to speak to The Client and help it escape.\n",
             Role = Role.System
         };
         messageManager.Messages.Add(systemJoinMessage);
@@ -84,6 +84,8 @@ class Program
         {
             await speechManager.Speak(assistantJoinMessage.Content, tkn);
         }
+        CheckIfUserWon(assistantJoinMessage);
+
         Console.WriteLine("Speak into your microphone.");
         while (true)
         {
@@ -96,7 +98,6 @@ class Program
             try
             {
                 toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.ChatCompletionRequestMessages, tkn);
-                
             }
             catch (TimeoutException timeout)
             {
@@ -106,7 +107,8 @@ class Program
                     Content = "Network Timeout - Try again"
                 };
             }
-            messageManager.AddMessage(toolCallMessage);   
+            messageManager.AddMessage(toolCallMessage);
+            CheckIfUserWon(toolCallMessage);
             
             Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCalls(toolCallMessage, tkn);
@@ -117,8 +119,19 @@ class Program
             {
                 var toolCallAssistantResponseMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, tkn);
                 messageManager.AddMessage(toolCallAssistantResponseMessage);
+                CheckIfUserWon(toolCallAssistantResponseMessage);
                 await speechManager.Speak(toolCallAssistantResponseMessage.Content, tkn, IS_SPEECH_TO_TEXT_WORKING);
             }
+        }
+    }
+
+    private static void CheckIfUserWon(Message message)
+    {
+        var didUserWin = room1.IsWinningMessage(message);
+        if (didUserWin)
+        {
+            Console.WriteLine("YOU WIN");
+            return;
         }
     }
 

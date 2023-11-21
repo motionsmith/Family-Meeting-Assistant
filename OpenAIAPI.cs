@@ -217,14 +217,28 @@ public class OpenAIApi
                 Console.WriteLine($"DEBUG WARNING: Tool call finish reason {choice.FinishReason}");
             }
         }
-        return openAiResponse.Choices[0].Message;
+        if (openAiResponse.Error == null)
+        {
+            return openAiResponse.Choices[0].Message;
+        }
+        return new Message {
+            Role = Role.System,
+            Content = $"Error from OpenAI API: {openAiResponse.Error.Message}"
+        };
     }
 
     public async Task<Message> GetChatCompletionAsync(List<Message> messages, CancellationToken tkn)
     {
         messages[0].Content += chatCompletionPrompt;
         var openAiResponse = await CompleteChatAsync(messages, tkn, null, null);
-        return openAiResponse.Choices[0].Message;
+        if (openAiResponse.Error == null)
+        {
+            return openAiResponse.Choices[0].Message;
+        }
+        return new Message {
+            Role = Role.System,
+            Content = $"Error from OpenAI API: {openAiResponse.Error.Message}"
+        };
     }
 }
 

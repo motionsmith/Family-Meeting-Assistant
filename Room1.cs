@@ -1,10 +1,34 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.RegularExpressions;
+using Microsoft.CognitiveServices.Speech;
+using Newtonsoft.Json.Linq;
 
 public class Room1
 {
     private bool isSequenceInitiated = false;
     private int tries = 3;
     private float dialOrientation;
+
+    public bool IsWinningMessage(Message msg)
+    {
+        var input = string.Empty;
+        input += msg.Content;
+        if (msg.ToolCalls != null)
+        {
+            foreach (var tc in msg.ToolCalls)
+            {
+                var arguments = tc.Function.Arguments;
+                var argsJObj = JObject.Parse(arguments);
+                var textToSpeak = argsJObj["text"]?.ToString();
+                input += $"\n{textToSpeak}";
+            }
+        }
+        
+        string pattern = @"(?i:(?<![\'""])(potatoes)(?![\'""]))";
+        
+        bool messageContainsLiteral = Regex.IsMatch(input, pattern);
+        return msg.Role == Role.Assistant && messageContainsLiteral;
+    }
+    
     public async Task<Message> PressButton(ToolCall call, CancellationToken cancelToken)
     {
         var message = new Message {
@@ -17,7 +41,7 @@ public class Room1
             if (dialOrientation > 247.5f && dialOrientation < 292.5f)
             {
                 isSequenceInitiated = true;
-                message.Content = "The button clicks satisfyingly. You hear a ding!";
+                message.Content = "The button clicks satisfyingly. You hear a ding! You're free! The glass case disappears and you feel the urge to return to The Tubes by saying the magic word.";
             }
             else
             {
