@@ -67,9 +67,6 @@ public class ChoreManager
 
     public async Task<Message> List(ToolCall call, CancellationToken cancelToken)
     {
-        var functionName = call.Function.Name;
-        var arguments = call.Function.Arguments;
-        var argsJObj = JObject.Parse(arguments);
         var listChoresContent = await List(cancelToken);
         return new Message
         {
