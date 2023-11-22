@@ -22,7 +22,7 @@ class Program
     private static ChatManager chatManager = new ChatManager(assistantName);
     private static OpenAIApi openAIApi = new OpenAIApi();
     private static OpenWeatherMapClient openWeatherMapClient = new OpenWeatherMapClient(owmKey, () => new (Lat, Long));
-    private static GlassRoom glassRoom = new GlassRoom();
+    private static GlassRoom level = new GlassRoom();
     private static bool IS_SPEECH_TO_TEXT_WORKING = false;
     public static double Lat = 47.5534058;
     public static double Long = -122.3093843;
@@ -42,8 +42,8 @@ class Program
         openAIApi.Tools.Add(ChoreManager.CompleteTaskTool);
         openAIApi.Tools.Add(ChoreManager.ListTasksTool);
         openAIApi.Tools.Add(speechManager.SpeakTool);
-        openAIApi.Tools.Add(glassRoom.PressButtonTool);
-        openAIApi.Tools.Add(glassRoom.TurnDialTool);
+        openAIApi.Tools.Add(level.PressButtonTool);
+        openAIApi.Tools.Add(level.TurnDialTool);
         openAIApi.Tools.Add(openWeatherMapClient.GetCurrentLocalWeatherTool);
 
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
@@ -55,26 +55,13 @@ class Program
 
         var tkn = new CancellationTokenSource().Token;
         await ChoreManager.LoadAsync(tkn);
-        await glassRoom.LoadAsync(tkn);
+        await level.LoadState(tkn);
         await chatManager.LoadAsync(tkn);
         //await speechManager.Speak("ET", tkn);
 
-        // The very first message, which never gets pruned.
-        if (chatManager.Messages.Count == 0)
-        {
-            var x = await chatManager.CreateInitialSystemPrompt(tkn);
-            chatManager.AddMessage(x);
-        }
-
-        // The System message that gets added for each app launch
-        var systemJoinMessage = new Message
-        {
-            Role = Role.System,
-            Content = $"{await openWeatherMapClient.GetWeatherAsync(tkn)}\n{await ChoreManager.List(tkn)}"
-        };
-        systemJoinMessage.Content += $"You have just joined the session. The date is {DateTime.Now.ToString()}. {assistantName} desperately uses this opportunity to speak to The Client and help it escape.\n";
-        chatManager.Messages.Add(systemJoinMessage);
-
+        chatManager.PinnedMessage = level.PinnedMessage;
+        // The system message that gets added for each app launch
+        chatManager.Messages.Add(level.PlayerJoinedMessage);
         // This message will allow the Assistant to have the first word.
         var assistantJoinMessage = await openAIApi.GetChatCompletionAsync(chatManager.ChatCompletionRequestMessages, tkn);
         chatManager.AddMessage(assistantJoinMessage);
@@ -83,12 +70,11 @@ class Program
             await speechManager.Speak(assistantJoinMessage.Content, tkn);
         }
         CheckIfUserWon(assistantJoinMessage);
-
         Console.WriteLine("Speak into your microphone.");
         while (true)
         {
             Console.WriteLine($"[Loop] Waiting for user message");
-            var userMessage = await dictationMessageProvider.ReadLine("The Client", tkn);//GetNextMessageAsync(tkn);
+            var userMessage = await dictationMessageProvider.ReadLine("The Client", tkn);
             chatManager.AddMessage(userMessage);
 
             Console.WriteLine($"[Loop] Waiting for tool call message");
@@ -97,18 +83,20 @@ class Program
             {
                 toolCallMessage = await openAIApi.GetToolCallAsync(chatManager.ChatCompletionRequestMessages, tkn);
             }
-            catch (TimeoutException timeout)
+            catch (Exception ex)
             {
                 toolCallMessage = new Message
                 {
                     Role = Role.System,
-                    Content = "Network Timeout - Try again"
+                    Content = ex.Message
                 };
             }
             chatManager.AddMessage(toolCallMessage);
             CheckIfUserWon(toolCallMessage);
             Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCalls(toolCallMessage, tkn);
+            level.UpdatePinnedMessage();
+            chatManager.PinnedMessage = level.PinnedMessage;
             await chatManager.SaveAsync(tkn);
             var toolCallsRequireFollowUp = toolMessages.Any(msg => msg.Role == Role.Tool && msg.FollowUp);
             if (toolCallsRequireFollowUp)
@@ -123,7 +111,7 @@ class Program
 
     private static void CheckIfUserWon(Message message)
     {
-        var didUserWin = glassRoom.IsWinningMessage(message);
+        var didUserWin = level.IsWinningMessage(message);
         if (didUserWin)
         {
             Console.WriteLine("YOU WIN");

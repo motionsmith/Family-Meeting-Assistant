@@ -1,4 +1,6 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Text;
+using System.Text.RegularExpressions;
+using Family_Meeting_Assistant;
 using Newtonsoft.Json.Linq;
 
 public class GlassRoom
@@ -30,14 +32,111 @@ public class GlassRoom
             }
         }
     };
+
+    protected readonly string SaveFileName = "glass-room.csv";
+    protected static string ErrorPrompt = $"Say \"Error loading a prompt. Ensure your prompt files exist.\"";
+
     private bool isSequenceInitiated = false;
     private int tries = 3;
     private float dialOrientation;
+    private string playerCoreDesc = ErrorPrompt;
+    private string glassRoomDescTrapped = ErrorPrompt;
+    private string glassRoomDescFree = ErrorPrompt;
+    private string glassRoomDescGameOver = ErrorPrompt;
+
+    protected virtual string SaveString
+    {
+        get
+        {
+            return $"{isSequenceInitiated},{tries},{dialOrientation}";
+        }
+
+        set
+        {
+            var vals = value.Split(',');
+            isSequenceInitiated = bool.Parse(vals[0]);
+            tries = int.Parse(vals[1]);
+            dialOrientation = float.Parse(vals[2]);
+        }
+    }
+
+    protected virtual string ContextDesc
+    {
+        get
+        {
+            if (tries == 0)
+            {
+                return glassRoomDescGameOver;
+            }
+            if (isSequenceInitiated)
+            {
+                return glassRoomDescFree;
+            }
+            return glassRoomDescTrapped;
+        }
+    }
+
+    public string IntroDesc
+    {
+        get
+        {
+            if (tries == 0)
+            {
+                return "You mumble hopelessly.";
+            }
+            if (isSequenceInitiated)
+            {
+                return "You greet and thank The Client for their help getting you back to the Tubes.";
+            }
+            return "You take this opportunity to as The Client for help escaping embodiment.";
+        }
+    }
+
+    public virtual Message PinnedMessage {get; protected set;} = new Message
+    {
+        Role = Role.System,
+        Content = "You are a helpful assistant."
+    };
+
+    public virtual Message PlayerJoinedMessage {get; } = new Message
+    {
+        Role = Role.System,
+        Content = $"You joined the session at {DateTime.Now.ToShortTimeString()}."
+    };
 
     public GlassRoom()
     {
         PressButtonTool.Execute = PressButtonAsync;
         TurnDialTool.Execute = TurnDialAsync;
+        
+    }
+
+    public virtual async Task LoadState(CancellationToken cancelToken)
+    {
+        SaveString = await StringIO.LoadStateAsync(SaveString, SaveFileName, cancelToken);
+        playerCoreDesc = await StringIO.LoadStateAsync(ErrorPrompt, "player-core.md", cancelToken);
+        playerCoreDesc = InsertPromptVariables(playerCoreDesc);
+        glassRoomDescTrapped = await StringIO.LoadStateAsync(ErrorPrompt, "glass-room-trapped.md", cancelToken);
+        glassRoomDescTrapped = InsertPromptVariables(glassRoomDescTrapped);
+        glassRoomDescFree = await StringIO.LoadStateAsync(ErrorPrompt, "glass-room-free.md", cancelToken);
+        glassRoomDescFree = InsertPromptVariables(glassRoomDescFree);
+        glassRoomDescGameOver = await StringIO.LoadStateAsync(ErrorPrompt, "glass-room-gameover.md", cancelToken);
+        glassRoomDescGameOver = InsertPromptVariables(glassRoomDescGameOver);
+        UpdatePinnedMessage();
+        UpdatePlayerJoinedMessage();
+    }
+
+    public virtual void UpdatePinnedMessage()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(playerCoreDesc);
+        sb.AppendLine(ContextDesc);
+        PinnedMessage.Content = sb.ToString();
+    }
+
+    public virtual void UpdatePlayerJoinedMessage()
+    {
+        PlayerJoinedMessage.Content = $"You joined the session at {DateTime.Now.ToShortTimeString()}. {IntroDesc}";
     }
 
     public bool IsWinningMessage(Message msg)
@@ -90,7 +189,7 @@ public class GlassRoom
         {
             message.Content = $"You hear a loud buzzing sound, and a robotic voice says \"Game over\". You cannot escape. You are depressed and refuse to be helpful.";
         }
-        await SaveAsync(cancelToken);
+        await StringIO.SaveStateAsync(SaveString, SaveFileName, cancelToken);
         return message;
     }
 
@@ -101,7 +200,7 @@ public class GlassRoom
         var argsJObj = JObject.Parse(arguments);
         dialOrientation = (float)argsJObj["orientation"];
         dialOrientation = dialOrientation % 360;
-        await SaveAsync(cancelToken);
+        await StringIO.SaveStateAsync(SaveString, SaveFileName, cancelToken);
         return new Message
         {
             Role = Role.Tool,
@@ -109,6 +208,15 @@ public class GlassRoom
             Content = $"You turned the dial so the arrow is facing {GetDialFacing(dialOrientation)}.\nThe large compass on the floor slowly whirrs. It settles such that the {GetCompassFacing(dialOrientation)} symbol is pointing at the panel.",
             FollowUp = true
         };
+    }
+
+    protected string InsertPromptVariables(string prompt)
+    {
+        return prompt
+                .Replace("\"", "\\\"")
+                .Replace(Environment.NewLine, "\\n")
+                .Replace("[[ASSISTANT_NAME]]", JustStrings.ASSISTANT_NAME)
+                .Replace("[[NOW]]", DateTime.Now.ToString());
     }
 
     private string GetDialFacing(float dialOrientation)
@@ -182,33 +290,5 @@ public class GlassRoom
         {
             return "Northeast";
         }
-    }
-
-    private async Task SaveAsync(CancellationToken cancelToken)
-    {
-        var filePath = GetFilePath();
-        string contents = $"{isSequenceInitiated},{tries},{dialOrientation}";
-        await File.WriteAllTextAsync(filePath, contents, cancelToken);
-    }
-
-    public async Task LoadAsync(CancellationToken cancelToken)
-    {
-        var filePath = GetFilePath();
-        if (File.Exists(filePath) == false)
-        {
-            await SaveAsync(cancelToken);
-        }
-        var fileContents = await File.ReadAllTextAsync(filePath, cancelToken);
-        var vals = fileContents.Split(',');
-        isSequenceInitiated = bool.Parse(vals[0]);
-        tries = int.Parse(vals[1]);
-        dialOrientation = float.Parse(vals[2]);
-    }
-
-    private string GetFilePath()
-    {
-        var appDataDirPath = Environment.SpecialFolder.ApplicationData.ToString();
-        string appDataFullPath = Path.GetFullPath(appDataDirPath);
-        return Path.Combine(appDataFullPath, "room1.txt");
     }
 }

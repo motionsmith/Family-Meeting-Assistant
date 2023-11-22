@@ -10,6 +10,18 @@ public class ChatManager
         }
     }
 
+    public Message PinnedMessage
+    {
+        get
+        {
+            return Messages[0];
+        }
+        set
+        {
+            Messages[0] = value;
+        }
+    }
+
     public List<Message> Messages {get; private set;} = new List<Message>();
 
     private string assistantName;
@@ -22,15 +34,16 @@ public class ChatManager
     public async Task LoadAsync(CancellationToken cancelToken)
     {
         var messageHistoryFilePath = GetFullPromptPath("message_history.json");
+        Messages = new List<Message> {
+            new Message { 
+                Role = Role.System,
+                Content = "You are a helpful assistant."
+            }
+        };
         if (File.Exists(messageHistoryFilePath))
         {
             string messageHistoryContent = await File.ReadAllTextAsync(messageHistoryFilePath, cancelToken);
             var loadedMessages = JsonConvert.DeserializeObject<MessageHistory>(messageHistoryContent);
-
-            var initialSystemMessage = await CreateInitialSystemPrompt(cancelToken);
-            Messages = new List<Message> {
-                initialSystemMessage
-            };
             Messages.AddRange(loadedMessages.Messages);
         }
         else
@@ -57,38 +70,9 @@ public class ChatManager
         Messages.Add(message);
     }
 
-    public void AddMessages(IEnumerable<Message> toolMessages)
+    public void AddMessages(IEnumerable<Message> messages)
     {
-        Messages.AddRange(toolMessages);
-    }
-
-    public string InsertPromptVariables(string prompt)
-    {
-        return prompt
-                .Replace("\"", "\\\"")
-                .Replace(Environment.NewLine, "\\n")
-                .Replace("[[ASSISTANT_NAME]]", assistantName)
-                .Replace("[[NOW]]", DateTime.Now.ToString());
-    }
-
-    public async Task<Message> CreateInitialSystemPrompt(CancellationToken cancelToken)
-    {
-        var initialPromptFilePath = GetFullPromptPath("prompt.txt");
-        var initialPromptString = "Tell me a joke";
-        if (File.Exists(initialPromptFilePath))
-        {
-            string initialPromptFileText = await File.ReadAllTextAsync(initialPromptFilePath, cancelToken);
-            initialPromptString = InsertPromptVariables(initialPromptFileText);
-        }
-        else
-        {
-            Console.WriteLine($"Prompt file {initialPromptFilePath} does not exist.");
-        }
-        return new Message
-        {
-            Content = initialPromptString,
-            Role = Role.System
-        };
+        Messages.AddRange(messages);
     }
 
     private string GetFullPromptPath(string fileName)
