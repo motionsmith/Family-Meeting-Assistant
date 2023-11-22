@@ -22,7 +22,7 @@ public class OpenAIApi
     {
         httpClient.Timeout = TimeSpan.FromSeconds(15);
         
-        chatCompletionPrompt = "\n\n[[ASSISTANT_NAME]]s instructions for speaking:";
+        chatCompletionPrompt = "\n\n## [[ASSISTANT_NAME]]s instructions for speaking\n\n";
         chatCompletionPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that The Client can hear you.";
         chatCompletionPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
         chatCompletionPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
@@ -31,15 +31,16 @@ public class OpenAIApi
         chatCompletionPrompt += "\nWhen speaking, be straightforward, not overly nice.";
         chatCompletionPrompt += "\nDo not bother to tell us that you are available to help because we already know you're here.";
 
-        toolCallPrompt = "\n\n[[ASSISTANT_NAME]]'s instructions for function calling:";
+        toolCallPrompt = "\n\n## [[ASSISTANT_NAME]]'s instructions for function calling\n\n";
         toolCallPrompt += "\nYou always output JSON to call functions.";
         toolCallPrompt += "\nThe JSON you output will be interpreted by the client and a function will be executed on your behalf.";
 
-        toolCallPrompt += "\n\n[[ASSISTANT_NAME]]s instructions for calling the speak function:";
+        toolCallPrompt += "## [[ASSISTANT_NAME]]s instructions for speaking\n\n";
         toolCallPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
-        toolCallPrompt += "\nIf you must vocalize, add your text to your message content. This will cause the text content to be read (via text-to-speech) over the laptop speakers so that The Client can hear you.";
+        toolCallPrompt += "\nIf you must compose, add your text to your message content. This will cause the text content to be read (via text-to-speech) over the laptop speakers so that The Client can hear you.";
         toolCallPrompt += "\nYou do not address people before they address you, unless you are speaking for some other approved reason.";
         toolCallPrompt += "\nYou proactively reminds Clients of tasks due soon without being prompted.";
+        toolCallPrompt += "\nYou do not discuss tasks that are not due soon unless The Client directly inquires about one.";
         toolCallPrompt += "\nYou speak a response when someone addresses you as [[ASSISTANT_NAME]], but you are brief.";
         toolCallPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
         toolCallPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
@@ -58,7 +59,7 @@ public class OpenAIApi
             Messages = messages.ToList(),
             Temperature = 0.7,
             Tools = tools,
-            ResponseFormat = responseFormat
+            ResponseFormat = null
         };
 
         var requestJson = JsonConvert.SerializeObject(next);
@@ -89,29 +90,29 @@ public class OpenAIApi
         var responseContent = await response.Content.ReadAsStringAsync();
         var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
 
-        if (response.IsSuccessStatusCode && next.Tools != null && next.Tools.Count > 0 && responseContentObject.Choices[0].FinishReason != FinishReason.ToolCalls)
+        /*if (response.IsSuccessStatusCode && next.Tools != null && next.Tools.Count > 0 && responseContentObject.Choices[0].FinishReason != FinishReason.ToolCalls)
         {
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("Malformed tool call from OPENAI. Response dump is below.");
             Console.ForegroundColor = ConsoleColor.DarkGray;
             Console.WriteLine(responseContent);
             Console.ResetColor();
-        }
+        }*/
         return responseContentObject;
     }
 
     public async Task<Message> GetToolCallAsync(List<Message> messages, CancellationToken tkn)
     {
         messages[0].Content += toolCallPrompt;
-        var openAiResponse = await CompleteChatAsync(messages, tkn, new ResponseFormat { Type = "json_object" }, Tools);
+        var openAiResponse = await CompleteChatAsync(messages, tkn, null, Tools);
 
-        foreach (var choice in openAiResponse.Choices)
+        /*foreach (var choice in openAiResponse.Choices)
         {
             if (choice.FinishReason != FinishReason.ToolCalls)
             {
                 Console.WriteLine($"DEBUG WARNING: Tool call finish reason {choice.FinishReason}");
             }
-        }
+        }*/
         if (openAiResponse.Error == null)
         {
             return openAiResponse.Choices[0].Message;

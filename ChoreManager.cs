@@ -95,9 +95,10 @@ public static class ChoreManager
         await SaveChoresAsync(cancelToken);
         return new Message
         {
-            Content = $"Filed a task: {newChore.Name}",
+            Content = $"Filed a task: {newChore.Name}\nBriefly confirm.",
             Role = Role.Tool,
-            ToolCallId = toolCall.Id
+            ToolCallId = toolCall.Id,
+            FollowUp = true
         };
     }
 

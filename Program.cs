@@ -41,7 +41,7 @@ class Program
         openAIApi.Tools.Add(ChoreManager.FileTaskTool);
         openAIApi.Tools.Add(ChoreManager.CompleteTaskTool);
         openAIApi.Tools.Add(ChoreManager.ListTasksTool);
-        openAIApi.Tools.Add(speechManager.SpeakTool);
+        //openAIApi.Tools.Add(speechManager.SpeakTool);
         openAIApi.Tools.Add(level.PressButtonTool);
         openAIApi.Tools.Add(level.TurnDialTool);
         openAIApi.Tools.Add(openWeatherMapClient.GetCurrentLocalWeatherTool);
@@ -121,9 +121,9 @@ class Program
 
     private static async Task<IEnumerable<Message>> HandleToolCalls(Message message, CancellationToken cancelToken)
     {
-        if (string.IsNullOrEmpty(message.Content) == false && (message.ToolCalls == null || message.ToolCalls.Count == 0))
+        if (string.IsNullOrEmpty(message.Content) == false)
         {
-            Console.WriteLine($"DEBUG WARNING: Speaking malformed OpenAI tool call");
+            
             await speechManager.Speak(message.Content, cancelToken, IS_SPEECH_TO_TEXT_WORKING);
         }
 
