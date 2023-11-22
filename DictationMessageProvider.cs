@@ -23,7 +23,7 @@ public class DictationMessageProvider
             if (e.Result.Reason == ResultReason.RecognizedSpeech)
             {
                 var recognitionMessage = new Message {
-                     Content = $"{DateTime.Now.ToShortTimeString()}\n:User transcription: {e.Result.Text}",
+                     Content = $"### Speech transcription:\n\n_The Client_ ({DateTime.Now.ToShortTimeString()}):\n{e.Result.Text}\n",
                      Role = Role.User
                 };
                 messageQueue.Enqueue(recognitionMessage);
@@ -70,24 +70,11 @@ public class DictationMessageProvider
         return new Message { Content = $"{DateTime.Now.ToShortTimeString()}\n{userName} (typed): {userInputText}", Role = Role.User };
     }
 
-    public async Task<Message> GetNextMessageAsync(CancellationToken cancelToken)
+    public async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationToken cancelToken)
     {
-        Message? result = null;
-        while (result == null)
-        {
-            if (messageQueue.IsEmpty == false)
-            {
-                if (messageQueue.TryDequeue(out var outMsg))
-                {
-                    result = outMsg;
-                }
-            }
-            else
-            {
-                await Task.Delay(50, cancelToken);
-            }
-        }
-        return result;
+        var newMessages = messageQueue.ToArray(); // Garbage
+        messageQueue.Clear();
+        return newMessages;
     }
 
     internal async Task StartContinuousRecognitionAsync()

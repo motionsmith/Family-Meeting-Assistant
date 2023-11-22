@@ -24,11 +24,9 @@ public class ChatManager
 
     public List<Message> Messages {get; private set;} = new List<Message>();
 
-    private string assistantName;
-
-    public ChatManager(string assistantName)
+    public ChatManager()
     {
-        this.assistantName = assistantName;
+        
     }
 
     public async Task LoadAsync(CancellationToken cancelToken)
