@@ -1,6 +1,4 @@
-﻿namespace Family_Meeting_Assistant;
-
-public static class StringIO
+﻿public static class StringIO
 {
     public static async Task<string> LoadStateAsync(string state, string fileName, CancellationToken cancelToken)
     {

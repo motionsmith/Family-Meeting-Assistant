@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Reflection.Metadata;
+using Family_Meeting_Assistant;
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
 using Newtonsoft.Json;
@@ -24,7 +25,7 @@ class Program
     private static ChatManager chatManager = new();
     private static OpenAIApi openAIApi = new();
     private static OpenWeatherMapClient openWeatherMapClient = new OpenWeatherMapClient(owmKey, () => new(Lat, Long));
-    private static GlassRoom level = new();
+    private static CircumstanceManager circumstanceManager = new ();
     private static bool IS_SPEECH_TO_TEXT_WORKING = true;
 
     async static Task Main(string[] args)
@@ -38,14 +39,6 @@ class Program
         dictationMessageProvider = new DictationMessageProvider(speechRecognizer);
         speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, assistantName);
 
-        // Can't add non-static tools until we're in Main
-        openAIApi.Tools.Add(ChoreManager.FileTaskTool);
-        openAIApi.Tools.Add(ChoreManager.CompleteTaskTool);
-        openAIApi.Tools.Add(ChoreManager.ListTasksTool);
-        openAIApi.Tools.Add(level.PressButtonTool);
-        openAIApi.Tools.Add(level.TurnDialTool);
-        openAIApi.Tools.Add(openWeatherMapClient.GetCurrentLocalWeatherTool);
-
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
         {
             await dictationMessageProvider.StopContinuousRecognitionAsync();
@@ -53,12 +46,12 @@ class Program
 
         var tkn = new CancellationTokenSource().Token;
         await ChoreManager.LoadAsync(tkn);
-        await level.LoadState(tkn);
+        await circumstanceManager.LoadStateAsync(tkn);
         await chatManager.LoadAsync(tkn);
 
-        chatManager.PinnedMessage = level.PinnedMessage;
+        chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
         // The system message that gets added for each app launch
-        chatManager.Messages.Add(level.PlayerJoinedMessage);
+        chatManager.Messages.Add(circumstanceManager.PlayerJoinedMessage);
         // This message will allow the Assistant to have the first word.
         var assistantJoinMessage = await openAIApi.GetChatCompletionAsync(chatManager.ChatCompletionRequestMessages, tkn);
         chatManager.AddMessage(assistantJoinMessage);
@@ -66,7 +59,7 @@ class Program
         {
             await speechManager.Speak(assistantJoinMessage.Content, tkn, IS_SPEECH_TO_TEXT_WORKING);
         }
-        CheckIfUserWon(assistantJoinMessage);
+        await circumstanceManager.UpdateCurrentCircumstance(assistantJoinMessage, tkn);
         Console.WriteLine("Speak into your microphone.");
         while (true)
         {
@@ -74,15 +67,11 @@ class Program
             if (newMessages.Count() > 0)
             {
                 chatManager.AddMessages(newMessages);
-                //Console.WriteLine($"[Loop] Waiting for user message");
-                //var userMessage = await dictationMessageProvider.ReadLine("The Client", tkn);
-                //chatManager.AddMessage(userMessage);
-
                 Console.WriteLine($"[System] Waiting for Assistant response...");
                 Message toolCallMessage;
                 try
                 {
-                    toolCallMessage = await openAIApi.GetToolCallAsync(chatManager.ChatCompletionRequestMessages, tkn);
+                    toolCallMessage = await openAIApi.GetToolCallAsync(chatManager.ChatCompletionRequestMessages, tkn, circumstanceManager.Tools);
                 }
                 catch (Exception ex)
                 {
@@ -93,30 +82,20 @@ class Program
                     };
                 }
                 chatManager.AddMessage(toolCallMessage);
-                CheckIfUserWon(toolCallMessage);
                 var toolMessages = await HandleToolCalls(toolCallMessage, tkn);
-                level.UpdatePinnedMessage();
-                chatManager.PinnedMessage = level.PinnedMessage;
+                await circumstanceManager.UpdateCurrentCircumstance(toolCallMessage, tkn);
+                chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
                 await chatManager.SaveAsync(tkn);
                 var toolCallsRequireFollowUp = toolMessages.Any(msg => msg.Role == Role.Tool && msg.FollowUp);
                 if (toolCallsRequireFollowUp)
                 {
                     var toolCallAssistantResponseMessage = await openAIApi.GetChatCompletionAsync(chatManager.ChatCompletionRequestMessages, tkn);
                     chatManager.AddMessage(toolCallAssistantResponseMessage);
-                    CheckIfUserWon(toolCallAssistantResponseMessage);
+                    await circumstanceManager.UpdateCurrentCircumstance(toolCallAssistantResponseMessage, tkn);
+                    chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
                     await speechManager.Speak(toolCallAssistantResponseMessage.Content, tkn, IS_SPEECH_TO_TEXT_WORKING);
                 }
             }
-        }
-    }
-
-    private static void CheckIfUserWon(Message message)
-    {
-        var didUserWin = level.IsWinningMessage(message);
-        if (didUserWin)
-        {
-            Console.WriteLine("[SYSTEM] YOU WIN");
-            return;
         }
     }
 
@@ -140,7 +119,7 @@ class Program
             var arguments = call.Function.Arguments;
             Console.WriteLine($"[{assistantName}] {functionName}({arguments})");
             Message toolMessage;
-            var tool = openAIApi.Tools.FirstOrDefault(tool => tool.Function.Name == functionName);
+            var tool = circumstanceManager.Tools.FirstOrDefault(tool => tool.Function.Name == functionName);
             if (tool != null)
             {
                 toolMessage = await tool.Execute(call, cancelToken);

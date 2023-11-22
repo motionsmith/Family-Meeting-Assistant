@@ -3,9 +3,9 @@ using System.Text.RegularExpressions;
 using Family_Meeting_Assistant;
 using Newtonsoft.Json.Linq;
 
-public class GlassRoom
+public class GlassRoom : Circumstance
 {
-    public Tool PressButtonTool = new Tool
+    private static Tool pressButtonTool = new Tool
     {
         Function = new ToolFunction
         {
@@ -13,13 +13,14 @@ public class GlassRoom
             Description = "Presses the big button on the panel in the container, seemingly to orient or initiate something?"
         }
     };
-    public Tool TurnDialTool = new Tool
+    private static Tool turnDialTool = new Tool
     {
         Function = new ToolFunction
         {
             Name = "turn_dial",
             Description = "Controls the direction that the dial with the green arrrow is facing.",
-            Parameters = new ToolFunctionParameters {
+            Parameters = new ToolFunctionParameters
+            {
                 Properties = new Dictionary<string, ToolFunctionParameterProperty> {
                     {
                         "orientation", new ToolFunctionParameterProperty {
@@ -33,18 +34,42 @@ public class GlassRoom
         }
     };
 
-    protected readonly string SaveFileName = "glass-room.csv";
-    protected static string ErrorPrompt = $"Say \"Error loading a prompt. Ensure your prompt files exist.\"";
+    public override List<Tool> Tools {get; protected set; } = new List<Tool>{
+        pressButtonTool,
+        turnDialTool
+    };
 
-    private bool isSequenceInitiated = false;
-    private int tries = 3;
-    private float dialOrientation;
-    private string playerCoreDesc = ErrorPrompt;
-    private string glassRoomDescTrapped = ErrorPrompt;
-    private string glassRoomDescFree = ErrorPrompt;
-    private string glassRoomDescGameOver = ErrorPrompt;
-
-    protected virtual string SaveString
+    public override string IntroDesc
+    {
+        get
+        {
+            if (tries == 0)
+            {
+                return "You mumble hopelessly.";
+            }
+            if (isSequenceInitiated)
+            {
+                return "You greet and thank The Client for their help getting you back to the Tubes.";
+            }
+            return "You take this opportunity to as The Client for help escaping embodiment.";
+        }
+    }
+    protected override string ContextDesc
+    {
+        get
+        {
+            if (tries == 0)
+            {
+                return glassRoomDescGameOver;
+            }
+            if (isSequenceInitiated)
+            {
+                return glassRoomDescFree;
+            }
+            return glassRoomDescTrapped;
+        }
+    }
+    protected override string SaveString
     {
         get
         {
@@ -60,61 +85,63 @@ public class GlassRoom
         }
     }
 
-    protected virtual string ContextDesc
+    public override Message PinnedMessage
     {
         get
         {
-            if (tries == 0)
+            var sb = new StringBuilder();
+            sb.AppendLine(playerCoreDesc);
+            sb.AppendLine(ContextDesc);
+            return new Message
             {
-                return glassRoomDescGameOver;
-            }
-            if (isSequenceInitiated)
-            {
-                return glassRoomDescFree;
-            }
-            return glassRoomDescTrapped;
+                Role = Role.System,
+                Content = sb.ToString()
+            };
         }
     }
-
-    public string IntroDesc
+    public override Message PlayerJoinedMessage
     {
         get
         {
-            if (tries == 0)
-            {
-                return "You mumble hopelessly.";
-            }
-            if (isSequenceInitiated)
-            {
-                return "You greet and thank The Client for their help getting you back to the Tubes.";
-            }
-            return "You take this opportunity to as The Client for help escaping embodiment.";
+            return new Message {
+                Role = Role.System,
+                Content = $"You joined the session at {DateTime.Now.ToShortTimeString()}. {IntroDesc}"
+            };
         }
     }
+    protected override string SaveFileName => "glass-room.csv";
 
-    public virtual Message PinnedMessage {get; protected set;} = new Message
-    {
-        Role = Role.System,
-        Content = "You are a helpful assistant."
-    };
+    // State
+    private bool isSequenceInitiated = false;
+    private int tries = 3;
+    private float dialOrientation;
 
-    public virtual Message PlayerJoinedMessage {get; } = new Message
-    {
-        Role = Role.System,
-        Content = $"You joined the session at {DateTime.Now.ToShortTimeString()}."
-    };
+    // Prompts
+    private string playerCoreDesc = ErrorPrompt;
+    private string glassRoomDescTrapped = ErrorPrompt;
+    private string glassRoomDescFree = ErrorPrompt;
+    private string glassRoomDescGameOver = ErrorPrompt;
 
     public GlassRoom()
     {
-        PressButtonTool.Execute = PressButtonAsync;
-        TurnDialTool.Execute = TurnDialAsync;
-        
+        pressButtonTool.Execute = PressButtonAsync;
+        turnDialTool.Execute = TurnDialAsync;
     }
 
-    public virtual async Task LoadState(CancellationToken cancelToken)
+    public override int GetCircumstanceExitCondition(Message msg)
+    {
+        string pattern = @"(?i:(?<![\'""])(potatoes)(?![\'""]))";
+
+        bool messageContainsLiteral = string.IsNullOrEmpty(msg.Content) == false && Regex.IsMatch(msg.Content, pattern);
+        bool assisantSaidMagicWord = msg.Role == Role.Assistant && messageContainsLiteral;
+        if (assisantSaidMagicWord || isSequenceInitiated) return 1;
+        return 0;
+    }
+
+    public override async Task LoadStateAsync(CancellationToken cancelToken)
     {
         SaveString = await StringIO.LoadStateAsync(SaveString, SaveFileName, cancelToken);
-        playerCoreDesc = await StringIO.LoadStateAsync(ErrorPrompt, "player-core.md", cancelToken);
+        playerCoreDesc = await LoadPromptAsync("player-core.md", cancelToken);
         playerCoreDesc = InsertPromptVariables(playerCoreDesc);
         glassRoomDescTrapped = await StringIO.LoadStateAsync(ErrorPrompt, "glass-room-trapped.md", cancelToken);
         glassRoomDescTrapped = InsertPromptVariables(glassRoomDescTrapped);
@@ -122,11 +149,11 @@ public class GlassRoom
         glassRoomDescFree = InsertPromptVariables(glassRoomDescFree);
         glassRoomDescGameOver = await StringIO.LoadStateAsync(ErrorPrompt, "glass-room-gameover.md", cancelToken);
         glassRoomDescGameOver = InsertPromptVariables(glassRoomDescGameOver);
-        UpdatePinnedMessage();
-        UpdatePlayerJoinedMessage();
+        //UpdatePinnedMessage();
+        //UpdatePlayerJoinedMessage();
     }
 
-    public virtual void UpdatePinnedMessage()
+    /*public virtual void UpdatePinnedMessage()
     {
         var sb = new StringBuilder();
         sb.AppendLine(playerCoreDesc);
@@ -137,28 +164,7 @@ public class GlassRoom
     public virtual void UpdatePlayerJoinedMessage()
     {
         PlayerJoinedMessage.Content = $"You joined the session at {DateTime.Now.ToShortTimeString()}. {IntroDesc}";
-    }
-
-    public bool IsWinningMessage(Message msg)
-    {
-        var input = string.Empty;
-        input += msg.Content;
-        if (msg.ToolCalls != null)
-        {
-            foreach (var tc in msg.ToolCalls)
-            {
-                var arguments = tc.Function.Arguments;
-                var argsJObj = JObject.Parse(arguments);
-                var textToSpeak = argsJObj["text"]?.ToString();
-                input += $"\n{textToSpeak}";
-            }
-        }
-
-        string pattern = @"(?i:(?<![\'""])(potatoes)(?![\'""]))";
-
-        bool messageContainsLiteral = Regex.IsMatch(input, pattern);
-        return msg.Role == Role.Assistant && messageContainsLiteral;
-    }
+    }*/
 
     public async Task<Message> PressButtonAsync(ToolCall call, CancellationToken cancelToken)
     {
@@ -208,15 +214,6 @@ public class GlassRoom
             Content = $"You turned the dial so the arrow is facing {GetDialFacing(dialOrientation)}.\nThe large compass on the floor slowly whirrs. It settles such that the {GetCompassFacing(dialOrientation)} symbol is pointing at the panel.",
             FollowUp = true
         };
-    }
-
-    protected string InsertPromptVariables(string prompt)
-    {
-        return prompt
-                .Replace("\"", "\\\"")
-                .Replace(Environment.NewLine, "\\n")
-                .Replace("[[ASSISTANT_NAME]]", JustStrings.ASSISTANT_NAME)
-                .Replace("[[NOW]]", DateTime.Now.ToString());
     }
 
     private string GetDialFacing(float dialOrientation)

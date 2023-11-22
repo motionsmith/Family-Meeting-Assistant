@@ -15,8 +15,6 @@ public class OpenAIApi
 
     private readonly string chatCompletionPrompt;
     private readonly string toolCallPrompt;
-
-    public List<Tool> Tools = new List<Tool>();
     
     public OpenAIApi()
     {
@@ -101,10 +99,10 @@ public class OpenAIApi
         return responseContentObject;
     }
 
-    public async Task<Message> GetToolCallAsync(List<Message> messages, CancellationToken tkn)
+    public async Task<Message> GetToolCallAsync(List<Message> messages, CancellationToken tkn, List<Tool> tools)
     {
         messages[0].Content += toolCallPrompt;
-        var openAiResponse = await CompleteChatAsync(messages, tkn, null, Tools);
+        var openAiResponse = await CompleteChatAsync(messages, tkn, null, tools);
 
         /*foreach (var choice in openAiResponse.Choices)
         {
