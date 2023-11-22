@@ -12,122 +12,15 @@ public class OpenAIApi
     private readonly string openAIKey = Environment.GetEnvironmentVariable("OPENAI_KEY");
     private readonly string openAIOrg = Environment.GetEnvironmentVariable("OPENAI_ORG");
     private readonly string modelId = Environment.GetEnvironmentVariable("MODEL_ID");
-    private readonly string assistantName = Environment.GetEnvironmentVariable("ASSISTANT_NAME");
 
     private readonly string chatCompletionPrompt;
     private readonly string toolCallPrompt;
-    private readonly List<Tool> _tools = new List<Tool> {
-            new Tool {
-                Function = new ToolFunction {
-                    Name = "file_task",
-                    Description = "Adds a task to the Client task list. Replaces tasks with the same title.",
-                    Parameters = new ToolFunctionParameters {
-                        Properties = new Dictionary<string, ToolFunctionParameterProperty> {
-                            {
-                                "title", new ToolFunctionParameterProperty
-                                {
-                                    Type = "string",
-                                    Description = "A short description that helps the Client remember what needs to be done to complete this task."
-                                }
-                            },
-                            {
-                                "due", new ToolFunctionParameterProperty
-                                {
-                                    Type = "string",
-                                    Description = "The date that the task is due, in the format MM/DD/YYYY."
-                                }
-                            }
-                        },
-                        Required = new List<string> { "title" }
-                    }
-                }
-            },
-            new Tool {
-                Function = new ToolFunction
-                {
-                    Name = "list_tasks",
-                    Description = "Lists the tasks in the Client's task list."
-                }
-            },
-            new Tool {
-                Function = new ToolFunction {
-                    Name = "complete_task",
-                    Description = "Removes a task from the Client's task list.",
-                    Parameters = new ToolFunctionParameters {
-                        Properties = new Dictionary<string, ToolFunctionParameterProperty> {
-                            {
-                                "title", new ToolFunctionParameterProperty
-                                {
-                                    Type = "string",
-                                    Description = "The title of the task to be removed."
-                                }
-                            }
-                        },
-                        Required = new List<string> { "title" }
-                    }
-                }
-            },
-            new Tool {
-                Function = new ToolFunction
-                {
-                    Name = "speak",
-                    Description = "Causes the LLM to speak using text-to-speech though the user's speakers.",
-                    Parameters = new ToolFunctionParameters
-                    {
-                        Properties = new Dictionary<string, ToolFunctionParameterProperty> {
-                            {
-                                "text", new ToolFunctionParameterProperty
-                                {
-                                    Type = "string",
-                                    Description = "The text to be spoken."
-                                }
-                            }
-                        },
-                        Required = new List<string> { "text" }
-                    }
-                }
-            },
-            new Tool {
-                Function = new ToolFunction
-                {
-                    Name = "get_current_local_weather",
-                    Description = "Returns current local weather data from Open Weather Map API."
-                }
-            },
-            new Tool {
-                Function = new ToolFunction
-                {
-                    Name = "press_button",
-                    Description = "Presses the big button on the panel in the container, seemingly to orient or initiate something?"
-                }
-            },
-            new Tool {
-                Function = new ToolFunction
-                {
-                    Name = "turn_dial",
-                    Description = "Controls the direction that the dial with the green arrrow is facing.",
-                    Parameters = new ToolFunctionParameters
-                    {
-                        Properties = new Dictionary<string, ToolFunctionParameterProperty> {
-                            {
-                                "orientation", new ToolFunctionParameterProperty
-                                {
-                                    Type = "number",
-                                    Description = "Determines the direction the arrow on the dial is facing. An orientation of 0 degrees indicates the arrow faces up. Turning clockwise increases the orientation value. (0-360)"
-                                }
-                            }
-                        },
-                        Required = new List<string> { "orientation" }
-                    }
-                }
-            }
-        };
-
+    
     public OpenAIApi()
     {
         httpClient.Timeout = TimeSpan.FromSeconds(15);
         
-        chatCompletionPrompt = "\n\n[[ASSISTANT_NAME]]]s instructions for speaking:";
+        chatCompletionPrompt = "\n\n[[ASSISTANT_NAME]]s instructions for speaking:";
         chatCompletionPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that The Client can hear you.";
         chatCompletionPrompt += "\nDo not generate JSON. Generate plain text to be spoken aloud.";
         chatCompletionPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
@@ -140,7 +33,7 @@ public class OpenAIApi
         toolCallPrompt += "\nYou always output JSON to call functions.";
         toolCallPrompt += "\nThe JSON you output will be interpreted by the client and a function will be executed on your behalf.";
 
-        toolCallPrompt += "\n\n[[ASSISTANT_NAME]]]s instructions for calling the speak function:";
+        toolCallPrompt += "\n\n[[ASSISTANT_NAME]]s instructions for calling the speak function:";
         toolCallPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
         toolCallPrompt += "\nIf you must vocalize, call the speak() function. This will cause the text content to be read (via text-to-speech) over the laptop speakers so that The Client can hear you.";
         toolCallPrompt += "\nYou do not address people before they address you, unless you are speaking for some other approved reason.";
@@ -208,7 +101,7 @@ public class OpenAIApi
     public async Task<Message> GetToolCallAsync(List<Message> messages, CancellationToken tkn)
     {
         messages[0].Content += toolCallPrompt;
-        var openAiResponse = await CompleteChatAsync(messages, tkn, new ResponseFormat { Type = "json_object" }, _tools);
+        var openAiResponse = await CompleteChatAsync(messages, tkn, new ResponseFormat { Type = "json_object" }, Tools.List);
 
         foreach (var choice in openAiResponse.Choices)
         {
