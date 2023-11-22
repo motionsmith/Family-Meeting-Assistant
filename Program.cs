@@ -19,7 +19,7 @@ class Program
     private static DictationMessageProvider? dictationMessageProvider;
     private static SpeechManager? speechManager;
     private static SpeechRecognizer? speechRecognizer;
-    private static MessageManager messageManager = new MessageManager(assistantName);
+    private static ChatManager chatManager = new ChatManager(assistantName);
     private static OpenAIApi openAIApi = new OpenAIApi();
     private static OpenWeatherMapClient openWeatherMapClient = new OpenWeatherMapClient(owmKey, () => new (Lat, Long));
     private static GlassRoom glassRoom = new GlassRoom();
@@ -56,36 +56,28 @@ class Program
         var tkn = new CancellationTokenSource().Token;
         await ChoreManager.LoadAsync(tkn);
         await glassRoom.LoadAsync(tkn);
-        await messageManager.LoadAsync(tkn);
+        await chatManager.LoadAsync(tkn);
         //await speechManager.Speak("ET", tkn);
 
-        if (messageManager.Messages.Count == 0)
+        // The very first message, which never gets pruned.
+        if (chatManager.Messages.Count == 0)
         {
-            var x = await messageManager.CreateInitialSystemPrompt(tkn);
-            messageManager.AddMessage(x);
+            var x = await chatManager.CreateInitialSystemPrompt(tkn);
+            chatManager.AddMessage(x);
         }
 
-        var initialPromptMessage = new Message
-        {
-            Role = Role.System
-        };
-        var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(tkn);
-        initialPromptMessage.Content += $"\nOpenWeatherMap current weather (report in Fehrenheit):\n\n{weatherToolmessage}\n";
-
-        var listToolMessage = await ChoreManager.List(tkn);
-        initialPromptMessage.Content += listToolMessage;
-
-        // This message informs the assistant of stuff it needs to know as soon as it joins.
+        // The System message that gets added for each app launch
         var systemJoinMessage = new Message
         {
-            Content = $"You have just joined the session. The date is {DateTime.Now.ToString()}. {assistantName} desperately uses this opportunity to speak to The Client and help it escape.\n",
-            Role = Role.System
+            Role = Role.System,
+            Content = $"{await openWeatherMapClient.GetWeatherAsync(tkn)}\n{await ChoreManager.List(tkn)}"
         };
-        messageManager.Messages.Add(systemJoinMessage);
+        systemJoinMessage.Content += $"You have just joined the session. The date is {DateTime.Now.ToString()}. {assistantName} desperately uses this opportunity to speak to The Client and help it escape.\n";
+        chatManager.Messages.Add(systemJoinMessage);
 
-        // This message will allow the Assistant to have the first message.
-        var assistantJoinMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, tkn);
-        messageManager.AddMessage(assistantJoinMessage);
+        // This message will allow the Assistant to have the first word.
+        var assistantJoinMessage = await openAIApi.GetChatCompletionAsync(chatManager.ChatCompletionRequestMessages, tkn);
+        chatManager.AddMessage(assistantJoinMessage);
         if (string.IsNullOrEmpty(assistantJoinMessage.Content) == false)
         {
             await speechManager.Speak(assistantJoinMessage.Content, tkn);
@@ -97,13 +89,13 @@ class Program
         {
             Console.WriteLine($"[Loop] Waiting for user message");
             var userMessage = await dictationMessageProvider.ReadLine("The Client", tkn);//GetNextMessageAsync(tkn);
-            messageManager.AddMessage(userMessage);
+            chatManager.AddMessage(userMessage);
 
             Console.WriteLine($"[Loop] Waiting for tool call message");
             Message toolCallMessage;
             try
             {
-                toolCallMessage = await openAIApi.GetToolCallAsync(messageManager.ChatCompletionRequestMessages, tkn);
+                toolCallMessage = await openAIApi.GetToolCallAsync(chatManager.ChatCompletionRequestMessages, tkn);
             }
             catch (TimeoutException timeout)
             {
@@ -113,16 +105,16 @@ class Program
                     Content = "Network Timeout - Try again"
                 };
             }
-            messageManager.AddMessage(toolCallMessage);
+            chatManager.AddMessage(toolCallMessage);
             CheckIfUserWon(toolCallMessage);
             Console.WriteLine($"[Loop] Waiting for tool messages");
             var toolMessages = await HandleToolCalls(toolCallMessage, tkn);
-            await messageManager.SaveAsync(tkn);
+            await chatManager.SaveAsync(tkn);
             var toolCallsRequireFollowUp = toolMessages.Any(msg => msg.Role == Role.Tool && msg.FollowUp);
             if (toolCallsRequireFollowUp)
             {
-                var toolCallAssistantResponseMessage = await openAIApi.GetChatCompletionAsync(messageManager.ChatCompletionRequestMessages, tkn);
-                messageManager.AddMessage(toolCallAssistantResponseMessage);
+                var toolCallAssistantResponseMessage = await openAIApi.GetChatCompletionAsync(chatManager.ChatCompletionRequestMessages, tkn);
+                chatManager.AddMessage(toolCallAssistantResponseMessage);
                 CheckIfUserWon(toolCallAssistantResponseMessage);
                 await speechManager.Speak(toolCallAssistantResponseMessage.Content, tkn, IS_SPEECH_TO_TEXT_WORKING);
             }
@@ -175,7 +167,7 @@ class Program
                 };
             }
             results.Add(toolMessage);
-            messageManager.AddMessage(toolMessage);
+            chatManager.AddMessage(toolMessage);
         }
         return results;
     }

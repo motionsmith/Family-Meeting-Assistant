@@ -41,7 +41,7 @@ public class OpenWeatherMapClient
     {
         var responseBody = await GetWeatherAsync(cancelToken);
         return new Message {
-            Content = $"{responseBody}\nThe client prefers fahrenheit units.",
+            Content = $"OpenWeatherMap current weather report:\n{responseBody}\nThe Client prefers fahrenheit units.",
             Role = Role.Tool,
             ToolCallId = toolCall.Id,
             FollowUp = true

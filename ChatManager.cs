@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-public class MessageManager
+public class ChatManager
 {
     public List<Message> ChatCompletionRequestMessages
     {
@@ -14,7 +14,7 @@ public class MessageManager
 
     private string assistantName;
 
-    public MessageManager(string assistantName)
+    public ChatManager(string assistantName)
     {
         this.assistantName = assistantName;
     }
