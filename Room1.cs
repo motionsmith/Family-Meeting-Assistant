@@ -1,12 +1,44 @@
 ﻿using System.Text.RegularExpressions;
-using Microsoft.CognitiveServices.Speech;
 using Newtonsoft.Json.Linq;
 
 public class Room1
 {
+    public Tool PressButtonTool = new Tool
+    {
+        Function = new ToolFunction
+        {
+            Name = "press_button",
+            Description = "Presses the big button on the panel in the container, seemingly to orient or initiate something?"
+        }
+    };
+    public Tool TurnDialTool = new Tool
+    {
+        Function = new ToolFunction
+        {
+            Name = "turn_dial",
+            Description = "Controls the direction that the dial with the green arrrow is facing.",
+            Parameters = new ToolFunctionParameters {
+                Properties = new Dictionary<string, ToolFunctionParameterProperty> {
+                    {
+                        "orientation", new ToolFunctionParameterProperty {
+                            Type = "number",
+                            Description = "Determines the direction the arrow on the dial is facing. An orientation of 0 degrees indicates the arrow faces up. Turning clockwise increases the orientation value. (0-360)"
+                        }
+                    }
+                },
+                Required = new List<string> { "orientation" }
+            }
+        }
+    };
     private bool isSequenceInitiated = false;
     private int tries = 3;
     private float dialOrientation;
+
+    public Room1()
+    {
+        PressButtonTool.Execute = PressButtonAsync;
+        TurnDialTool.Execute = TurnDialAsync;
+    }
 
     public bool IsWinningMessage(Message msg)
     {
@@ -22,16 +54,17 @@ public class Room1
                 input += $"\n{textToSpeak}";
             }
         }
-        
+
         string pattern = @"(?i:(?<![\'""])(potatoes)(?![\'""]))";
-        
+
         bool messageContainsLiteral = Regex.IsMatch(input, pattern);
         return msg.Role == Role.Assistant && messageContainsLiteral;
     }
-    
-    public async Task<Message> PressButton(ToolCall call, CancellationToken cancelToken)
+
+    public async Task<Message> PressButtonAsync(ToolCall call, CancellationToken cancelToken)
     {
-        var message = new Message {
+        var message = new Message
+        {
             Role = Role.Tool,
             ToolCallId = call.Id,
             FollowUp = true
@@ -61,7 +94,7 @@ public class Room1
         return message;
     }
 
-    public async Task<Message> TurnDial(ToolCall call, CancellationToken cancelToken)
+    public async Task<Message> TurnDialAsync(ToolCall call, CancellationToken cancelToken)
     {
         var functionName = call.Function.Name;
         var arguments = call.Function.Arguments;
@@ -69,7 +102,8 @@ public class Room1
         dialOrientation = (float)argsJObj["orientation"];
         dialOrientation = dialOrientation % 360;
         await SaveAsync(cancelToken);
-        return new Message {
+        return new Message
+        {
             Role = Role.Tool,
             ToolCallId = call.Id,
             Content = $"You turned the dial so the arrow is facing {GetDialFacing(dialOrientation)}.\nThe large compass on the floor slowly whirrs. It settles such that the {GetCompassFacing(dialOrientation)} symbol is pointing at the panel.",

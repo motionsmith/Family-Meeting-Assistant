@@ -5,6 +5,28 @@ using Newtonsoft.Json.Linq;
 
 public class SpeechManager
 {
+    public Tool SpeakTool = new Tool
+    {
+        Function = new ToolFunction
+        {
+            Name = "speak",
+            Description = "Causes the LLM to speak using text-to-speech through The Client's speakers.",
+            Parameters = new ToolFunctionParameters
+            {
+                Properties = new Dictionary<string, ToolFunctionParameterProperty> {
+                            {
+                                "text", new ToolFunctionParameterProperty
+                                {
+                                    Type = "string",
+                                    Description = "The text to be spoken."
+                                }
+                            }
+                        },
+                Required = new List<string> { "text" }
+            }
+        }
+    };
+
     private SpeechRecognizer speechRecognizer;
     private SpeechSynthesizer speechSynthesizer;
     private string assistantName;
@@ -14,6 +36,7 @@ public class SpeechManager
         this.speechRecognizer = speechRecognizer;
         this.speechSynthesizer = speechSynthesizer;
         this.assistantName = assistantName;
+        SpeakTool.Execute = Speak;
     }
 
     public async Task Speak(string message, CancellationToken cancelToken, bool autoPauseSpeechRecognizer = false)
@@ -42,7 +65,7 @@ public class SpeechManager
             await speechRecognizer.StartContinuousRecognitionAsync();
     }
 
-    public async Task<Message> SpeakFromToolCall(ToolCall toolCall, CancellationToken cancelToken)
+    public async Task<Message> Speak(ToolCall toolCall, CancellationToken cancelToken)
     {
         var arguments = toolCall.Function.Arguments;
         var argsJObj = JObject.Parse(arguments);

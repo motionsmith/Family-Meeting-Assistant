@@ -15,6 +15,8 @@ public class OpenAIApi
 
     private readonly string chatCompletionPrompt;
     private readonly string toolCallPrompt;
+
+    public List<Tool> Tools = new List<Tool>();
     
     public OpenAIApi()
     {
@@ -22,12 +24,12 @@ public class OpenAIApi
         
         chatCompletionPrompt = "\n\n[[ASSISTANT_NAME]]s instructions for speaking:";
         chatCompletionPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that The Client can hear you.";
-        chatCompletionPrompt += "\nDo not generate JSON. Generate plain text to be spoken aloud.";
         chatCompletionPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
         chatCompletionPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
         chatCompletionPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
         chatCompletionPrompt += "\nSince you can only read the transcription, you can only use intuition to figure out who is speaking. Feel free to ask for clarification, but only when necessary, as this is an interruption.";
-        chatCompletionPrompt += "\nWhen speaking, be straightforward, not overly nice. You do not bother with passive comments like \"If you need anything, just let me know.\" or \"Is there anything else I can help you with?\"";
+        chatCompletionPrompt += "\nWhen speaking, be straightforward, not overly nice.";
+        chatCompletionPrompt += "\nDo not bother to tell us that you are available to help because we already know you're here.";
 
         toolCallPrompt = "\n\n[[ASSISTANT_NAME]]'s instructions for function calling:";
         toolCallPrompt += "\nYou always output JSON to call functions.";
@@ -35,7 +37,7 @@ public class OpenAIApi
 
         toolCallPrompt += "\n\n[[ASSISTANT_NAME]]s instructions for calling the speak function:";
         toolCallPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
-        toolCallPrompt += "\nIf you must vocalize, call the speak() function. This will cause the text content to be read (via text-to-speech) over the laptop speakers so that The Client can hear you.";
+        toolCallPrompt += "\nIf you must vocalize, add your text to your message content. This will cause the text content to be read (via text-to-speech) over the laptop speakers so that The Client can hear you.";
         toolCallPrompt += "\nYou do not address people before they address you, unless you are speaking for some other approved reason.";
         toolCallPrompt += "\nYou proactively reminds Clients of tasks due soon without being prompted.";
         toolCallPrompt += "\nYou speak a response when someone addresses you as [[ASSISTANT_NAME]], but you are brief.";
@@ -101,7 +103,7 @@ public class OpenAIApi
     public async Task<Message> GetToolCallAsync(List<Message> messages, CancellationToken tkn)
     {
         messages[0].Content += toolCallPrompt;
-        var openAiResponse = await CompleteChatAsync(messages, tkn, new ResponseFormat { Type = "json_object" }, Tools.List);
+        var openAiResponse = await CompleteChatAsync(messages, tkn, new ResponseFormat { Type = "json_object" }, Tools);
 
         foreach (var choice in openAiResponse.Choices)
         {
@@ -342,7 +344,8 @@ public class Tool
     [JsonProperty("function")]
     public ToolFunction Function { get; set; }
 
-    public Func<string>? Log { get; set; }
+    [JsonIgnore]
+    public ToolCallDelegate? Execute { get; set; }
 }
 
 public class ToolCall
@@ -377,3 +380,5 @@ public class MalformedSpeechData
     [JsonProperty("text", Required = Required.Always)]
     public string Text { get; set; }
 }
+
+public delegate Task<Message> ToolCallDelegate(ToolCall tc, CancellationToken tkn);
