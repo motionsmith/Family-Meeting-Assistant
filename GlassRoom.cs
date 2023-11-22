@@ -1,7 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 
-public class Room1
+public class GlassRoom
 {
     public Tool PressButtonTool = new Tool
     {
@@ -34,7 +34,7 @@ public class Room1
     private int tries = 3;
     private float dialOrientation;
 
-    public Room1()
+    public GlassRoom()
     {
         PressButtonTool.Execute = PressButtonAsync;
         TurnDialTool.Execute = TurnDialAsync;

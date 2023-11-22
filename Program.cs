@@ -13,16 +13,16 @@ class Program
     private static readonly string assistantName = Environment.GetEnvironmentVariable("ASSISTANT_NAME");
     private static readonly string owmKey = Environment.GetEnvironmentVariable("OWM_KEY");
 
-    private static OpenAIApi openAIApi = new OpenAIApi();
     private static SpeechConfig? speechConfig;
     private static SpeechSynthesizer? speechSynthesizer;
     private static AudioConfig? audioConfig;
     private static DictationMessageProvider? dictationMessageProvider;
-    private static MessageManager messageManager = new MessageManager(assistantName);
     private static SpeechManager? speechManager;
     private static SpeechRecognizer? speechRecognizer;
-    private static OpenWeatherMapClient openWeatherMapClient = new OpenWeatherMapClient(owmKey);
-    private static Room1 room1 = new Room1();
+    private static MessageManager messageManager = new MessageManager(assistantName);
+    private static OpenAIApi openAIApi = new OpenAIApi();
+    private static OpenWeatherMapClient openWeatherMapClient = new OpenWeatherMapClient(owmKey, () => new (Lat, Long));
+    private static GlassRoom glassRoom = new GlassRoom();
     private static bool IS_SPEECH_TO_TEXT_WORKING = false;
     public static double Lat = 47.5534058;
     public static double Long = -122.3093843;
@@ -42,8 +42,8 @@ class Program
         openAIApi.Tools.Add(ChoreManager.CompleteTaskTool);
         openAIApi.Tools.Add(ChoreManager.ListTasksTool);
         openAIApi.Tools.Add(speechManager.SpeakTool);
-        openAIApi.Tools.Add(room1.PressButtonTool);
-        openAIApi.Tools.Add(room1.TurnDialTool);
+        openAIApi.Tools.Add(glassRoom.PressButtonTool);
+        openAIApi.Tools.Add(glassRoom.TurnDialTool);
         openAIApi.Tools.Add(openWeatherMapClient.GetCurrentLocalWeatherTool);
 
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
@@ -55,7 +55,7 @@ class Program
 
         var tkn = new CancellationTokenSource().Token;
         await ChoreManager.LoadAsync(tkn);
-        await room1.LoadAsync(tkn);
+        await glassRoom.LoadAsync(tkn);
         await messageManager.LoadAsync(tkn);
         //await speechManager.Speak("ET", tkn);
 
@@ -69,7 +69,7 @@ class Program
         {
             Role = Role.System
         };
-        var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(Lat, Long, tkn);
+        var weatherToolmessage = await openWeatherMapClient.GetWeatherAsync(tkn);
         initialPromptMessage.Content += $"\nOpenWeatherMap current weather (report in Fehrenheit):\n\n{weatherToolmessage}\n";
 
         var listToolMessage = await ChoreManager.List(tkn);
@@ -131,7 +131,7 @@ class Program
 
     private static void CheckIfUserWon(Message message)
     {
-        var didUserWin = room1.IsWinningMessage(message);
+        var didUserWin = glassRoom.IsWinningMessage(message);
         if (didUserWin)
         {
             Console.WriteLine("YOU WIN");

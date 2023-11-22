@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net.Http;
+using System.Numerics;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -17,17 +18,20 @@ public class OpenWeatherMapClient
 
     private readonly string _apiKey;
     private readonly HttpClient _httpClient;
+    private Func<Tuple<double, double>> locationProvider; 
 
-    public OpenWeatherMapClient(string apiKey)
+    public OpenWeatherMapClient(string apiKey, Func<Tuple<double, double>> locationProvider)
     {
         _apiKey = apiKey;
         _httpClient = new HttpClient();
         GetCurrentLocalWeatherTool.Execute = GetCurrentLocalWeatherAsync;
+        this.locationProvider = locationProvider;
     }
 
-    public async Task<string> GetWeatherAsync(double latitude, double longitude, CancellationToken cancelToken)
+    public async Task<string> GetWeatherAsync(CancellationToken cancelToken)
     {
-        string url = $"https://api.openweathermap.org/data/2.5/weather?lat={latitude}&lon={longitude}&appid={_apiKey}";
+        var location = locationProvider.Invoke();
+        string url = $"https://api.openweathermap.org/data/2.5/weather?lat={location.Item1}&lon={location.Item2}&appid={_apiKey}";
         var response = await _httpClient.GetAsync(url, cancelToken);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync(cancelToken);
@@ -35,10 +39,7 @@ public class OpenWeatherMapClient
 
     public async Task<Message> GetCurrentLocalWeatherAsync(ToolCall toolCall, CancellationToken cancelToken)
     {
-        var jArgs = JObject.Parse(toolCall.Function.Arguments);
-        var latitude = (float)jArgs["lat"];
-        var longitude = (float)jArgs["long"];
-        var responseBody = await GetWeatherAsync(latitude, longitude, cancelToken);
+        var responseBody = await GetWeatherAsync(cancelToken);
         return new Message {
             Content = $"{responseBody}\nThe client prefers fahrenheit units.",
             Role = Role.Tool,
