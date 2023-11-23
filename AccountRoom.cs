@@ -274,7 +274,7 @@ public class AccountRoom : Circumstance
     public override async Task LoadStateAsync(CancellationToken cancelToken)
     {
         SaveString = await StringIO.LoadStateAsync(SaveString, SaveFileName, cancelToken);
-        playerCoreDesc = await LoadPromptAsync("account-room-player-core.md", cancelToken);
+        playerCoreDesc = await LoadPromptAsync("account-room-core.md", cancelToken);
         obtainClientNameDesc = await LoadPromptAsync("account-room-name.md", cancelToken);
         obtainClientCreditCardDesc = await LoadPromptAsync("account-room-cc.md", cancelToken);
         createAccountDesc  = await LoadPromptAsync("account-room-submit.md", cancelToken);

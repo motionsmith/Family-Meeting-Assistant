@@ -39,7 +39,7 @@
         {
             return new Message {
                 Role = Role.System,
-                Content = $"You joined the session at {DateTime.Now.ToShortTimeString()}. {IntroDesc}"
+                Content = $"You joined the session at {DateTime.Now.ToString()}. {IntroDesc}"
             };
         }
     }

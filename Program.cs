@@ -67,7 +67,7 @@ class Program
             if (newMessages.Count() > 0)
             {
                 chatManager.AddMessages(newMessages);
-                Console.WriteLine($"[System] Waiting for Assistant response...");
+                Console.WriteLine($"[System] Waiting for response...");
                 Message toolCallMessage;
                 try
                 {

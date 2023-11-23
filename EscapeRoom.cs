@@ -172,7 +172,7 @@ public class EscapeRoom : Circumstance
     public override async Task LoadStateAsync(CancellationToken cancelToken)
     {
         SaveString = await StringIO.LoadStateAsync(SaveString, SaveFileName, cancelToken);
-        playerCoreDesc = await LoadPromptAsync("escape-room-player-core.md", cancelToken);
+        playerCoreDesc = await LoadPromptAsync("escape-room-core.md", cancelToken);
         roomDescTrapped = await LoadPromptAsync("escape-room-trapped.md", cancelToken);
         roomDescFree = await LoadPromptAsync("escape-room-free.md", cancelToken);
         roomDescGameOver = await LoadPromptAsync("escape-room-gameover.md", cancelToken);
