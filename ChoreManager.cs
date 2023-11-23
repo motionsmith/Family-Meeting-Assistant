@@ -157,7 +157,7 @@ public static class ChoreManager
         var choresFilePath = GetFilePath();
         if (System.IO.File.Exists(choresFilePath) == false)
         {
-            Chores.Add(new Chore("Come up with some chores."));
+            Chores.Add(new Chore("Win the game!"));
             await SaveChoresAsync(cancelToken);
         }
         var choresFileContents = await System.IO.File.ReadAllTextAsync(choresFilePath, cancelToken);

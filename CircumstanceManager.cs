@@ -17,11 +17,10 @@ public class CircumstanceManager
             //throw new NotImplementedException("Need to implement this condition. Some sort of End of game scenario.");
         }
     }
-    public readonly GlassRoom glassRoom = new GlassRoom();
+    public readonly AccountRoom accountRoom = new AccountRoom();
+    public readonly EscapeRoom escapeRoom = new EscapeRoom();
 
-    public List<int> State = new List<int> {
-        0
-    };
+    public List<int> State = new List<int> {  0, 0 };
 
     public readonly List<Circumstance> Circumstances;
 
@@ -52,7 +51,8 @@ public class CircumstanceManager
     public CircumstanceManager()
     {
         Circumstances = new List<Circumstance> {
-            glassRoom
+            accountRoom,
+            escapeRoom
         };
     }
 

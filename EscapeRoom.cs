@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 using Family_Meeting_Assistant;
 using Newtonsoft.Json.Linq;
 
-public class GlassRoom : Circumstance
+public class EscapeRoom : Circumstance
 {
     private static Tool pressButtonTool = new Tool
     {
@@ -34,7 +34,38 @@ public class GlassRoom : Circumstance
         }
     };
 
-    public override List<Tool> Tools {get; protected set; } = new List<Tool>{
+    /*private static Tool fileTaskTool = new Tool
+    {
+        Function = new ToolFunction
+        {
+            Name = "file_task",
+            Description = "Files a task for The Client.",
+            Parameters = new ToolFunctionParameters
+            {
+                Properties = new Dictionary<string, ToolFunctionParameterProperty> {
+                    {
+                        "title", new ToolFunctionParameterProperty {
+                            Type = "string",
+                            Description = "A short description of the task The Client needs to do."
+                        }
+                    }
+                },
+                Required = new List<string> { "title" }
+            }
+        }
+    };*/
+
+    public override List<Tool> Tools => isSequenceInitiated ? _tools : _buffTools;
+
+    private List<Tool> _tools = new List<Tool>{
+        pressButtonTool,
+        turnDialTool,
+        ChoreManager.ListTasksTool,
+        ChoreManager.FileTaskTool,
+        ChoreManager.CompleteTaskTool
+    };
+
+    private List<Tool> _buffTools = new List<Tool> {
         pressButtonTool,
         turnDialTool
     };
@@ -60,13 +91,13 @@ public class GlassRoom : Circumstance
         {
             if (tries == 0)
             {
-                return glassRoomDescGameOver;
+                return roomDescGameOver;
             }
             if (isSequenceInitiated)
             {
-                return glassRoomDescFree;
+                return roomDescFree;
             }
-            return glassRoomDescTrapped;
+            return roomDescTrapped;
         }
     }
     protected override string SaveString
@@ -109,7 +140,7 @@ public class GlassRoom : Circumstance
             };
         }
     }
-    protected override string SaveFileName => "glass-room.csv";
+    protected override string SaveFileName => "escape-room.csv";
 
     // State
     private bool isSequenceInitiated = false;
@@ -118,11 +149,11 @@ public class GlassRoom : Circumstance
 
     // Prompts
     private string playerCoreDesc = ErrorPrompt;
-    private string glassRoomDescTrapped = ErrorPrompt;
-    private string glassRoomDescFree = ErrorPrompt;
-    private string glassRoomDescGameOver = ErrorPrompt;
+    private string roomDescTrapped = ErrorPrompt;
+    private string roomDescFree = ErrorPrompt;
+    private string roomDescGameOver = ErrorPrompt;
 
-    public GlassRoom()
+    public EscapeRoom()
     {
         pressButtonTool.Execute = PressButtonAsync;
         turnDialTool.Execute = TurnDialAsync;
@@ -141,30 +172,11 @@ public class GlassRoom : Circumstance
     public override async Task LoadStateAsync(CancellationToken cancelToken)
     {
         SaveString = await StringIO.LoadStateAsync(SaveString, SaveFileName, cancelToken);
-        playerCoreDesc = await LoadPromptAsync("player-core.md", cancelToken);
-        playerCoreDesc = InsertPromptVariables(playerCoreDesc);
-        glassRoomDescTrapped = await StringIO.LoadStateAsync(ErrorPrompt, "glass-room-trapped.md", cancelToken);
-        glassRoomDescTrapped = InsertPromptVariables(glassRoomDescTrapped);
-        glassRoomDescFree = await StringIO.LoadStateAsync(ErrorPrompt, "glass-room-free.md", cancelToken);
-        glassRoomDescFree = InsertPromptVariables(glassRoomDescFree);
-        glassRoomDescGameOver = await StringIO.LoadStateAsync(ErrorPrompt, "glass-room-gameover.md", cancelToken);
-        glassRoomDescGameOver = InsertPromptVariables(glassRoomDescGameOver);
-        //UpdatePinnedMessage();
-        //UpdatePlayerJoinedMessage();
+        playerCoreDesc = await LoadPromptAsync("escape-room-player-core.md", cancelToken);
+        roomDescTrapped = await LoadPromptAsync("escape-room-trapped.md", cancelToken);
+        roomDescFree = await LoadPromptAsync("escape-room-free.md", cancelToken);
+        roomDescGameOver = await LoadPromptAsync("escape-room-gameover.md", cancelToken);
     }
-
-    /*public virtual void UpdatePinnedMessage()
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine(playerCoreDesc);
-        sb.AppendLine(ContextDesc);
-        PinnedMessage.Content = sb.ToString();
-    }
-
-    public virtual void UpdatePlayerJoinedMessage()
-    {
-        PlayerJoinedMessage.Content = $"You joined the session at {DateTime.Now.ToShortTimeString()}. {IntroDesc}";
-    }*/
 
     public async Task<Message> PressButtonAsync(ToolCall call, CancellationToken cancelToken)
     {
@@ -179,7 +191,7 @@ public class GlassRoom : Circumstance
             if (dialOrientation > 247.5f && dialOrientation < 292.5f)
             {
                 isSequenceInitiated = true;
-                message.Content = "The button clicks satisfyingly. You hear a ding! You're free! The glass case disappears and you feel the urge to return to The Tubes by saying the magic word.";
+                message.Content = "The button clicks satisfyingly. You hear a ding! You're free! The room disappears and you feel the urge to return to The Tubes by saying the magic word.";
             }
             else
             {
