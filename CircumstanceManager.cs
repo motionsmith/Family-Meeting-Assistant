@@ -1,8 +1,4 @@
-﻿using System.Reflection.Metadata;
-
-namespace Family_Meeting_Assistant;
-
-public class CircumstanceManager
+﻿public class CircumstanceManager
 {
     public Circumstance CurrentCircumstance
     {

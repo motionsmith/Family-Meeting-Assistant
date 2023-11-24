@@ -1,20 +1,14 @@
 ﻿using System.Diagnostics;
-using System.Reflection.Metadata;
-using Family_Meeting_Assistant;
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using Microsoft.Extensions.Configuration;
 
 class Program
 {
     public static double Lat = 47.5534058;
     public static double Long = -122.3093843;
 
-    private static readonly string speechKey = Environment.GetEnvironmentVariable("SPEECH_KEY");
-    private static readonly string speechRegion = Environment.GetEnvironmentVariable("SPEECH_REGION");
-    private static readonly string assistantName = Environment.GetEnvironmentVariable("ASSISTANT_NAME");
-    private static readonly string owmKey = Environment.GetEnvironmentVariable("OWM_KEY");
+    private static IConfiguration? config;
 
     private static SpeechConfig? speechConfig;
     private static SpeechSynthesizer? speechSynthesizer;
@@ -24,20 +18,28 @@ class Program
     private static SpeechRecognizer? speechRecognizer;
     private static ChatManager chatManager = new();
     private static OpenAIApi openAIApi = new();
-    private static OpenWeatherMapClient openWeatherMapClient = new OpenWeatherMapClient(owmKey, () => new(Lat, Long));
+    private static OpenWeatherMapClient? openWeatherMapClient;
     private static CircumstanceManager circumstanceManager = new ();
     private static bool IS_SPEECH_TO_TEXT_WORKING = true;
+    private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(20);
 
     async static Task Main(string[] args)
     {
+        config = new ConfigurationBuilder()
+            .AddUserSecrets<Program>()
+            .Build();
+
         // Speech stuff has to be configured in Main
-        speechConfig = SpeechConfig.FromSubscription(speechKey, speechRegion);
+        speechConfig = SpeechConfig.FromSubscription(config["SPEECH_KEY"], config["SPEECH_REGION"]);
         speechConfig.SpeechRecognitionLanguage = "en-US";
         audioConfig = AudioConfig.FromDefaultMicrophoneInput();
         speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
         speechSynthesizer = new SpeechSynthesizer(speechConfig);
         dictationMessageProvider = new DictationMessageProvider(speechRecognizer);
-        speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, assistantName);
+        speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, JustStrings.ASSISTANT_NAME);
+
+        openWeatherMapClient = new OpenWeatherMapClient(config["OWM_KEY"], () => new(Lat, Long));
+
 
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
         {
@@ -63,6 +65,7 @@ class Program
         Console.WriteLine("Speak into your microphone.");
         while (true)
         {
+            Stopwatch stopwatch = Stopwatch.StartNew();
             var newMessages = await dictationMessageProvider.GetNewMessagesAsync(tkn);
             if (newMessages.Count() > 0)
             {
@@ -96,6 +99,11 @@ class Program
                     await speechManager.Speak(toolCallAssistantResponseMessage.Content, tkn, IS_SPEECH_TO_TEXT_WORKING);
                 }
             }
+            stopwatch.Stop();
+            if (stopwatch.Elapsed < loopMinDuration)
+            {
+                await Task.Delay(loopMinDuration - stopwatch.Elapsed);
+            }
         }
     }
 
@@ -103,7 +111,6 @@ class Program
     {
         if (string.IsNullOrEmpty(message.Content) == false)
         {
-
             await speechManager.Speak(message.Content, cancelToken, IS_SPEECH_TO_TEXT_WORKING);
         }
 
@@ -117,7 +124,7 @@ class Program
         {
             var functionName = call.Function.Name;
             var arguments = call.Function.Arguments;
-            Console.WriteLine($"[{assistantName}] {functionName}({arguments})");
+            Console.WriteLine($"[{JustStrings.ASSISTANT_NAME}] {functionName}({arguments})");
             Message toolMessage;
             var tool = circumstanceManager.Tools.FirstOrDefault(tool => tool.Function.Name == functionName);
             if (tool != null)

@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using System.ComponentModel.DataAnnotations;
@@ -7,17 +8,17 @@ using System.Runtime.Serialization;
 public class OpenAIApi
 {
     private readonly HttpClient httpClient = new HttpClient();
-    private const string ApiEndpoint = "https://api.openai.com/v1/chat/completions";
-
-    private readonly string openAIKey = Environment.GetEnvironmentVariable("OPENAI_KEY");
-    private readonly string openAIOrg = Environment.GetEnvironmentVariable("OPENAI_ORG");
-    private readonly string modelId = Environment.GetEnvironmentVariable("MODEL_ID");
 
     private readonly string chatCompletionPrompt;
     private readonly string toolCallPrompt;
+    private IConfiguration? config;
     
     public OpenAIApi()
     {
+        config = new ConfigurationBuilder()
+            .AddUserSecrets<Program>()
+            .Build();
+
         httpClient.Timeout = TimeSpan.FromSeconds(15);
         
         chatCompletionPrompt = "\n\n## [[ASSISTANT_NAME]]s instructions for speaking\n\n";
@@ -53,7 +54,7 @@ public class OpenAIApi
     {
         var next = new ChatCompletionRequest
         {
-            Model = modelId,
+            Model = JustStrings.CHAT_MODEL,
             Messages = messages.ToList(),
             Temperature = 0.7,
             Tools = tools,
@@ -66,12 +67,12 @@ public class OpenAIApi
             System.Text.Encoding.UTF8,
             "application/json");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, ApiEndpoint)
+        var request = new HttpRequestMessage(HttpMethod.Post, JustStrings.CHAT_COMPLETION_ENDPOINT)
         {
             Content = requestContent,
             Headers = {
-                { "Authorization", $"Bearer {openAIKey}" },
-                { "OpenAI-Organization", openAIOrg }
+                { "Authorization", $"Bearer {config["OPENAI_KEY"]}" },
+                { "OpenAI-Organization", config["OPENAI_ORG"] }
             }
         };
         //Console.WriteLine(requestJson);

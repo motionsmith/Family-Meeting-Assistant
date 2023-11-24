@@ -161,17 +161,21 @@ public static class ChoreManager
             await SaveChoresAsync(cancelToken);
         }
         var choresFileContents = await System.IO.File.ReadAllTextAsync(choresFilePath, cancelToken);
-        Chores.AddRange(choresFileContents.Split('\n').Select(str =>
+        if (string.IsNullOrEmpty(choresFileContents) == false)
         {
-            var s = str.Split(',');
-            var choreName = s[0];
-            DateTime? dueDt = null;
-            if (DateTime.TryParse(s[1], out var dt))
+            Chores.AddRange(choresFileContents.Split('\n').Select(str =>
             {
-                dueDt = dt;
-            }
-            return new Chore(choreName, dueDt);
-        }));
+                var s = str.Split(',');
+                var choreName = s[0];
+                DateTime? dueDt = null;
+                if (DateTime.TryParse(s[1], out var dt))
+                {
+                    dueDt = dt;
+                }
+                return new Chore(choreName, dueDt);
+            }));
+        }
+        
     }
 
     private static string GetFilePath()

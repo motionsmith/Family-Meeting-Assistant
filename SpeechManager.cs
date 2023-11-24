@@ -20,16 +20,6 @@ public class SpeechManager
     {
         if (string.IsNullOrEmpty(message)) return;
 
-        try
-        {
-            var responseJson = JsonConvert.DeserializeObject<MalformedSpeechData>(message);
-            if (responseJson != null)
-            {
-                message = responseJson.Text;
-            }
-        }
-        catch(JsonException) { /*The NORMAL case is that the message is not JSON and doesn't need to be serialized.*/}
-
         Console.Write($"{assistantName} Says ");
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine($"\"{message}\"");
