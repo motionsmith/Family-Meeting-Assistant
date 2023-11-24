@@ -70,7 +70,6 @@ class Program
             {
                 foreach (var message in newUserDictatedMessages)
                 {
-                    Console.ForegroundColor = ConsoleColor.Blue;
                     Console.WriteLine($"Heard \"{message.Content}\"");
                     Console.ResetColor();
                 }

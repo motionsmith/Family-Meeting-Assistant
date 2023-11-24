@@ -14,9 +14,7 @@ public class SpeechManager
 
     public async Task<SpeechSynthesisResult> SpeakAsync(Message message)
     {
-        Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine($"\"{message.Content}\"");
-        Console.ResetColor();
         var result = await speechSynthesizer.SpeakTextAsync(message.Content);
         return result;
     }

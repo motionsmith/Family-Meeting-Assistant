@@ -67,7 +67,6 @@ public class DictationMessageProvider
     {
         if (cancelSynthTask == null)
         {
-            Console.WriteLine("Interrupting assistant");
             cancelSynthTask = speechSynthesizer.StopSpeakingAsync();
         }
     }
