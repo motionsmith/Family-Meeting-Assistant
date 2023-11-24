@@ -21,7 +21,7 @@ class Program
     private static OpenWeatherMapClient? openWeatherMapClient;
     private static CircumstanceManager circumstanceManager = new();
     private static bool IS_SPEECH_TO_TEXT_WORKING = false;
-    private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(20);
+    private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(100);
 
     async static Task Main(string[] args)
     {
@@ -31,6 +31,7 @@ class Program
 
         // Speech stuff has to be configured in Main
         speechConfig = SpeechConfig.FromSubscription(config["SPEECH_KEY"], config["SPEECH_REGION"]);
+        speechConfig.SpeechSynthesisVoiceName = JustStrings.VOICE_NAME;
         speechConfig.SpeechRecognitionLanguage = "en-US";
         audioConfig = AudioConfig.FromDefaultMicrophoneInput();
         speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
@@ -71,9 +72,8 @@ class Program
                 foreach (var message in newUserDictatedMessages)
                 {
                     Console.WriteLine($"Heard \"{message.Content}\"");
-                    Console.ResetColor();
                 }
-                
+                chatManager.AddMessages(await TimeMessenger.GetNewMessagesAsync(tkn));
                 chatManager.AddMessages(newUserDictatedMessages);
                 Console.WriteLine($"[System] Waiting for response...");
                 await TryCompleteChat(true, true, tkn);

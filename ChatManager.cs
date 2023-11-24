@@ -70,6 +70,7 @@ public class ChatManager
 
     public void AddMessages(IEnumerable<Message> messages)
     {
+        if (messages == null) return;
         Messages.AddRange(messages);
     }
 
