@@ -5,33 +5,31 @@ using Microsoft.CognitiveServices.Speech.Audio;
 public class DictationMessageProvider
 {
     private SpeechRecognizer speechRecognizer;
+    private SpeechSynthesizer speechSynthesizer;
+
+    private Task? cancelSynthTask;
 
     private ConcurrentQueue<Message> messageQueue = new ConcurrentQueue<Message>();
 
-    public DictationMessageProvider(SpeechRecognizer speechRecognizer)
+    public DictationMessageProvider(SpeechRecognizer speechRecognizer, SpeechSynthesizer speechSynthesizer)
     {
         this.speechRecognizer = speechRecognizer;
+        this.speechSynthesizer = speechSynthesizer;
 
-        var stopRecognition = new TaskCompletionSource<int>();
-        speechRecognizer.Recognizing += (s, e) =>
-        {
-            //Console.WriteLine($"RECOGNIZING: Text={e.Result.Text}");
-        };
-
+        speechSynthesizer.SynthesisCanceled += OnSynthCancelled;
+        
+        speechRecognizer.Recognizing += CancelSynthesis;
+        
         speechRecognizer.Recognized += (s, e) =>
         {
+            cancelSynthTask = null;
             if (e.Result.Reason == ResultReason.RecognizedSpeech)
             {
                 var recognitionMessage = new Message {
-                     Content = $"### Speech transcription:\n\n_The Client_ ({DateTime.Now.ToShortTimeString()}):\n{e.Result.Text}\n",
+                     Content = e.Result.Text,
                      Role = Role.User
                 };
                 messageQueue.Enqueue(recognitionMessage);
-
-                // Debug
-                Console.ForegroundColor = ConsoleColor.Blue;
-                Console.WriteLine($"Heard \"{e.Result.Text}\"");
-                Console.ResetColor();
             }
             else if (e.Result.Reason == ResultReason.NoMatch)
             {
@@ -50,24 +48,33 @@ public class DictationMessageProvider
                 Console.WriteLine($"CANCELED: Did you set the speech resource key and region values?");
             }
 
-            stopRecognition.TrySetResult(0);
+            
         };
 
         speechRecognizer.SessionStopped += (s, e) =>
         {
-            stopRecognition.TrySetResult(0);
+            
         };
+    }
+
+    private void OnSynthCancelled(object? sender, SpeechSynthesisEventArgs e)
+    {
+        Console.WriteLine("Assistant stopped speaking");
+        cancelSynthTask = null;
+    }
+
+    private void CancelSynthesis(object? sender, SpeechRecognitionEventArgs e)
+    {
+        if (cancelSynthTask == null)
+        {
+            Console.WriteLine("Interrupting assistant");
+            cancelSynthTask = speechSynthesizer.StopSpeakingAsync();
+        }
     }
 
     public async Task StopContinuousRecognitionAsync()
     {
         await speechRecognizer.StopContinuousRecognitionAsync();
-    }
-
-    public async Task<Message> ReadLine(string userName, CancellationToken cancelToken)
-    {
-        var userInputText = Console.ReadLine();
-        return new Message { Content = $"{DateTime.Now.ToShortTimeString()}\n{userName} (typed): {userInputText}", Role = Role.User };
     }
 
     public async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationToken cancelToken)

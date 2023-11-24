@@ -92,32 +92,19 @@ public class OpenAIApi
         return responseContentObject;
     }
 
-    public async Task<Message> GetToolCallAsync(List<Message> messages, CancellationToken tkn, List<Tool> tools)
+    public async Task<Message> GetChatCompletionAsync(List<Message> messages, CancellationToken tkn, List<Tool> tools)
     {
-        messages[0].Content += toolCallPrompt;
-        var openAiResponse = await CompleteChatAsync(messages, tkn, null, tools);
-
-        /*foreach (var choice in openAiResponse.Choices)
+        var allowTools = tools != null && tools.Count > 0;
+        if (allowTools)
         {
-            if (choice.FinishReason != FinishReason.ToolCalls)
-            {
-                Console.WriteLine($"DEBUG WARNING: Tool call finish reason {choice.FinishReason}");
-            }
-        }*/
-        if (openAiResponse.Error == null)
-        {
-            return openAiResponse.Choices[0].Message;
+            messages[0].Content += toolCallPrompt;
         }
-        return new Message {
-            Role = Role.System,
-            Content = $"Error from OpenAI API: {openAiResponse.Error.Message}"
-        };
-    }
-
-    public async Task<Message> GetChatCompletionAsync(List<Message> messages, CancellationToken tkn)
-    {
-        messages[0].Content += chatCompletionPrompt;
-        var openAiResponse = await CompleteChatAsync(messages, tkn, null, null);
+        else
+        {
+            messages[0].Content += chatCompletionPrompt;
+        }
+        
+        var openAiResponse = await CompleteChatAsync(messages, tkn, null, tools);
         if (openAiResponse.Error == null)
         {
             return openAiResponse.Choices[0].Message;
