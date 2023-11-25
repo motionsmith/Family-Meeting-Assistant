@@ -22,20 +22,23 @@ class Program
     private static CircumstanceManager? circumstanceManager;
     private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(100);
 
-    // TODO Terminate OPENAI requests if dictation is recognized.
-    // TODO Cannot send an API request while speech is being recognized, 
-    // TODO After an interruption, cannot send out another comption request until some pentalty duration.
+    // TODO NEEDS TESTING After an interruption, cannot send out another comption request until some pentalty duration.
     // TODO Support for both Airpods and open air mode. Open Air mode is required to silence the mic while assistant is talking.
     // TODO During open air mode, use a keyboard button or something to be able to interrupt the speech synthesis.
     // TODO Silent mode - only requests chat completion after a wake word
     // TODO Text input mode
+    // TODO Create a IMessageProvider interface to expose GetNewMessagesAsync calls (for weather, time, dictation, etc) ——will allow assistant to chime due to messages besides dictation recognition.
 
     // Three interaction modes
+    
     /*
-    1. **Active Mode** – The AI can listen and respond without needing a wake word.
-    2. **Wake Word Mode** – The AI listens passively and only responds when the wake word is used.
-    3. **Silent Mode** – The AI does not listen or respond until it is reactivated, possibly through a different interface or command.
+    1. **Active Mode** – The AI can listen and respond without needing a wake word. Can still be used passively by telling it how to behave.
+    2. **Mute AI Mode** – The AI listens passively and only responds when the wake word is used. This is like Active mode except the dictation message is not enough for the AI to respond. The message must also contain the wake word.
+    3. **Mute User Mode** – The AI does not listen or respond until it is reactivated, possibly through a different interface or command. This is how Google Home works
     */
+    // TODO Write prompts for the AI to teach the user about these modes.
+
+
 
     async static Task Main(string[] args)
     {
@@ -61,51 +64,68 @@ class Program
             await dictationMessageProvider.StopContinuousRecognitionAsync();
         };
 
-        var tkn = new CancellationTokenSource().Token;
-        await ChoreManager.LoadAsync(tkn);
-        await circumstanceManager.LoadStateAsync(tkn);
-        await chatManager.LoadAsync(tkn);
+        var cts = new CancellationTokenSource();
+        var tkn = cts.Token;
+            await ChoreManager.LoadAsync(tkn);
+            await circumstanceManager.LoadStateAsync(tkn);
+            await chatManager.LoadAsync(tkn);
 
-        chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
+            chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
 
-        // The system message that gets added for each app launch
-        chatManager.Messages.Add(circumstanceManager.PlayerJoinedMessage);
+            // The system message that gets added for each app launch
+            chatManager.Messages.Add(circumstanceManager.PlayerJoinedMessage);
 
-        // This message will allow the Assistant to have the first word.
-        if (false) await TryCompleteChat(false, false, tkn);
+            // This message will allow the Assistant to have the first word.
+            if (true) await TryCompleteChat(false, false, tkn);
 
-        Console.WriteLine("Speak into your microphone.");
-        await dictationMessageProvider.StartContinuousRecognitionAsync();
-        while (true)
-        {
-            Stopwatch stopwatch = Stopwatch.StartNew();
-
-            var newUserDictatedMessages = await dictationMessageProvider.GetNewMessagesAsync(tkn);
-            if (newUserDictatedMessages.Count() > 0)
+            Console.WriteLine("Speak into your microphone.");
+            await dictationMessageProvider.StartContinuousRecognitionAsync();
+            while (true)
             {
-                foreach (var message in newUserDictatedMessages)
+                try
                 {
-                    Console.WriteLine($"Heard \"{message.Content}\"");
+                    tkn = cts.Token;
+                    Stopwatch stopwatch = Stopwatch.StartNew();
+                    var newUserDictatedMessages = await dictationMessageProvider.GetNewMessagesAsync(cts);
+                    if (newUserDictatedMessages.Count() > 0)
+                    {
+                        foreach (var message in newUserDictatedMessages)
+                        {
+                            Console.WriteLine($"Heard \"{message.Content}\"");
+                        }
+                        chatManager.AddMessages(await TimeMessenger.GetNewMessagesAsync(tkn));
+                        chatManager.AddMessages(await openWeatherMapClient.GetNewMessagesAsync(tkn));
+                        chatManager.AddMessages(newUserDictatedMessages);
+                        Console.WriteLine($"[System] Waiting for response...");
+                        await TryCompleteChat(true, true, tkn);
+                    }
+                    stopwatch.Stop();
+                    if (stopwatch.Elapsed < loopMinDuration)
+                    {
+                        await Task.Delay(loopMinDuration - stopwatch.Elapsed, tkn);
+                    }
                 }
-                chatManager.AddMessages(await TimeMessenger.GetNewMessagesAsync(tkn));
-                chatManager.AddMessages(newUserDictatedMessages);
-                Console.WriteLine($"[System] Waiting for response...");
-                await TryCompleteChat(true, true, tkn);
+                catch (TaskCanceledException ex)
+                {
+                    Console.WriteLine($"Loop cancelled. Enforcing 1s loop delay");
+                    await chatManager.SaveAsync(new CancellationTokenSource().Token);
+                    await Task.Delay(1000);
+                    cts = new CancellationTokenSource();
+                }
+
             }
-            stopwatch.Stop();
-            if (stopwatch.Elapsed < loopMinDuration)
-            {
-                await Task.Delay(loopMinDuration - stopwatch.Elapsed);
-            }
-        }
     }
 
     private static async Task TryCompleteChat(bool allowRecursion, bool allowTools, CancellationToken tkn)
     {
-        Message assistantMessage;
+        Message? assistantMessage = null;
         try
         {
             assistantMessage = await openAIApi.GetChatCompletionAsync(chatManager.ChatCompletionRequestMessages, tkn, allowTools ? circumstanceManager.Tools : null);
+        }
+        catch (TaskCanceledException ex)
+        {
+            Console.WriteLine($"ChatCompletion request was cancelled.");
         }
         catch (Exception ex)
         {
@@ -115,18 +135,23 @@ class Program
                 Content = ex.Message
             };
         }
-        var toolMessages = await HandleAssistantMessage(assistantMessage, tkn);
-        await circumstanceManager.UpdateCurrentCircumstance(assistantMessage, tkn);
-        chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
-        await chatManager.SaveAsync(tkn);
-        if (allowRecursion)
+        
+        if (assistantMessage != null)
         {
-            var toolCallsRequireFollowUp = toolMessages.Any(msg => msg.Role == Role.Tool && msg.FollowUp);
-            if (toolCallsRequireFollowUp)
+            var toolMessages = await HandleAssistantMessage(assistantMessage, tkn);
+            await circumstanceManager.UpdateCurrentCircumstance(assistantMessage, tkn);
+            chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
+            await chatManager.SaveAsync(tkn);
+            if (allowRecursion)
             {
-                await TryCompleteChat(false, false, tkn);
+                var toolCallsRequireFollowUp = toolMessages.Any(msg => msg.Role == Role.Tool && msg.FollowUp);
+                if (toolCallsRequireFollowUp)
+                {
+                    await TryCompleteChat(false, false, tkn);
+                }
             }
         }
+        
     }
 
     private static async Task<IEnumerable<Message>> HandleAssistantMessage(Message message, CancellationToken cancelToken)

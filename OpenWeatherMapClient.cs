@@ -19,6 +19,7 @@ public class OpenWeatherMapClient
     private readonly string _apiKey;
     private readonly HttpClient _httpClient;
     private Func<Tuple<double, double>> locationProvider; 
+    private DateTime lastReport = DateTime.UnixEpoch;
 
     public OpenWeatherMapClient(string apiKey, Func<Tuple<double, double>> locationProvider)
     {
@@ -41,11 +42,31 @@ public class OpenWeatherMapClient
     {
         var responseBody = await GetWeatherAsync(cancelToken);
         return new Message {
-            Content = $"OpenWeatherMap current weather report:\n{responseBody}\nThe Client prefers fahrenheit units.",
+            Content = $"### Weather update:\n\n{responseBody}\nThe Client prefers fahrenheit units.",
             Role = Role.Tool,
             ToolCallId = toolCall.Id,
             FollowUp = true
         };
+    }
+
+    internal async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationToken tkn)
+    {
+        var messages = new List<Message>();
+        var now = DateTime.Now;
+        var duration = now - lastReport;
+        var thres = TimeSpan.FromMinutes(60);
+        if (duration > thres)
+        {
+            var reportContent = await GetWeatherAsync(tkn);
+            messages.Add(new Message
+            {
+                Role = Role.System,
+                Content = $"### Hourly weather update\n\n{reportContent}\nThe Client prefers fahrenheit units."
+            });
+            lastReport = now;
+        }
+        
+        return messages.AsEnumerable();
     }
 }
 

@@ -10,6 +10,7 @@ public class DictationMessageProvider
     private Task? cancelSynthTask;
 
     private ConcurrentQueue<Message> messageQueue = new ConcurrentQueue<Message>();
+    private CancellationTokenSource? interruptCts = null;
 
     public DictationMessageProvider(SpeechRecognizer speechRecognizer, SpeechSynthesizer speechSynthesizer)
     {
@@ -59,7 +60,7 @@ public class DictationMessageProvider
 
     private void OnSynthCancelled(object? sender, SpeechSynthesisEventArgs e)
     {
-        Console.WriteLine("Assistant stopped speaking");
+        Console.WriteLine("[Dictation] Synth task cancellation complete");
         cancelSynthTask = null;
     }
 
@@ -68,6 +69,8 @@ public class DictationMessageProvider
         if (cancelSynthTask == null)
         {
             cancelSynthTask = speechSynthesizer.StopSpeakingAsync();
+            Console.WriteLine($"Synth task cancellation started.");
+            interruptCts?.Cancel();
         }
     }
 
@@ -76,8 +79,9 @@ public class DictationMessageProvider
         await speechRecognizer.StopContinuousRecognitionAsync();
     }
 
-    public async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationToken cancelToken)
+    public async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
     {
+        interruptCts = cts;
         var newMessages = messageQueue.ToArray(); // Garbage
         messageQueue.Clear();
         return newMessages;

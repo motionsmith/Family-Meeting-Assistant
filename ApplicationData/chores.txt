@@ -1,5 +1,3 @@
-Cannot send an API request while speech is being recognized,null
-Terminate OPENAI requests if dictation is recognized,null
 After an interruption,null
 Support for both Airpods and open air mode. Open Air mode is required to silence the mic while assistant is talking,null
 During open air mode,null
