@@ -1,1 +1,8 @@
-I am so angry right now!,11/24/2023
+Cannot send an API request while speech is being recognized,null
+Terminate OPENAI requests if dictation is recognized,null
+After an interruption,null
+Support for both Airpods and open air mode. Open Air mode is required to silence the mic while assistant is talking,null
+During open air mode,null
+Silent mode - only requests chat completion after a wake wor,null
+Text input mode,null
+Get the weather update for Rainier Beach,null

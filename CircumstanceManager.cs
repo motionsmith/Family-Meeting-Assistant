@@ -13,8 +13,6 @@
             //throw new NotImplementedException("Need to implement this condition. Some sort of End of game scenario.");
         }
     }
-    public readonly AccountRoom accountRoom = new AccountRoom();
-    public readonly EscapeRoom escapeRoom = new EscapeRoom();
 
     public List<int> State = new List<int> {  0, 0 };
 
@@ -44,11 +42,10 @@
 
     private readonly string fileName = "current-circumstances.csv";
 
-    public CircumstanceManager()
+    public CircumstanceManager(OpenWeatherMapClient owmClient)
     {
         Circumstances = new List<Circumstance> {
-            accountRoom,
-            escapeRoom
+            new SmithsonianDefaultCircumstance(owmClient)
         };
     }
 

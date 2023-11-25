@@ -33,27 +33,6 @@ public class EscapeRoom : Circumstance
         }
     };
 
-    /*private static Tool fileTaskTool = new Tool
-    {
-        Function = new ToolFunction
-        {
-            Name = "file_task",
-            Description = "Files a task for The Client.",
-            Parameters = new ToolFunctionParameters
-            {
-                Properties = new Dictionary<string, ToolFunctionParameterProperty> {
-                    {
-                        "title", new ToolFunctionParameterProperty {
-                            Type = "string",
-                            Description = "A short description of the task The Client needs to do."
-                        }
-                    }
-                },
-                Required = new List<string> { "title" }
-            }
-        }
-    };*/
-
     public override List<Tool> Tools => isSequenceInitiated ? _tools : _buffTools;
 
     private List<Tool> _tools = new List<Tool>{

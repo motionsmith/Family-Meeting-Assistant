@@ -19,9 +19,23 @@ class Program
     private static ChatManager chatManager = new();
     private static OpenAIApi openAIApi = new();
     private static OpenWeatherMapClient? openWeatherMapClient;
-    private static CircumstanceManager circumstanceManager = new();
-    private static bool IS_SPEECH_TO_TEXT_WORKING = false;
+    private static CircumstanceManager? circumstanceManager;
     private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(100);
+
+    // TODO Terminate OPENAI requests if dictation is recognized.
+    // TODO Cannot send an API request while speech is being recognized, 
+    // TODO After an interruption, cannot send out another comption request until some pentalty duration.
+    // TODO Support for both Airpods and open air mode. Open Air mode is required to silence the mic while assistant is talking.
+    // TODO During open air mode, use a keyboard button or something to be able to interrupt the speech synthesis.
+    // TODO Silent mode - only requests chat completion after a wake word
+    // TODO Text input mode
+
+    // Three interaction modes
+    /*
+    1. **Active Mode** – The AI can listen and respond without needing a wake word.
+    2. **Wake Word Mode** – The AI listens passively and only responds when the wake word is used.
+    3. **Silent Mode** – The AI does not listen or respond until it is reactivated, possibly through a different interface or command.
+    */
 
     async static Task Main(string[] args)
     {
@@ -40,7 +54,7 @@ class Program
         speechManager = new SpeechManager(speechRecognizer, speechSynthesizer);
 
         openWeatherMapClient = new OpenWeatherMapClient(config["OWM_KEY"], () => new(Lat, Long));
-
+        circumstanceManager = new CircumstanceManager(openWeatherMapClient);
 
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
         {
@@ -58,7 +72,7 @@ class Program
         chatManager.Messages.Add(circumstanceManager.PlayerJoinedMessage);
 
         // This message will allow the Assistant to have the first word.
-        await TryCompleteChat(false, false, tkn);
+        if (false) await TryCompleteChat(false, false, tkn);
 
         Console.WriteLine("Speak into your microphone.");
         await dictationMessageProvider.StartContinuousRecognitionAsync();
