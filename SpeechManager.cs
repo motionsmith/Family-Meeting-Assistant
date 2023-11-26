@@ -6,17 +6,17 @@ public class SpeechManager : IMessageProvider
 {
     private SpeechRecognizer speechRecognizer;
     private SpeechSynthesizer speechSynthesizer;
-    private ClientSoundDeviceSetting clientSoundDeviceSetting;
+    private Func<SoundDeviceTypes> soundDeviceGetter;
 
     private bool wasInterrupted = false;
     private ConcurrentQueue<Message> newMessageQueue = new ConcurrentQueue<Message>();
 
-    public SpeechManager(SpeechRecognizer speechRecognizer, SpeechSynthesizer speechSynthesizer, ClientSoundDeviceSetting clientSoundDeviceSetting)
+    public SpeechManager(SpeechRecognizer speechRecognizer, SpeechSynthesizer speechSynthesizer, Func<SoundDeviceTypes> soundDeviceGetter)
     {
         this.speechRecognizer = speechRecognizer;
         this.speechSynthesizer = speechSynthesizer;
         this.speechSynthesizer.SynthesisCompleted += HandleSynthesisCompleted;
-        this.clientSoundDeviceSetting = clientSoundDeviceSetting;
+        this.soundDeviceGetter = soundDeviceGetter;
     }
 
     public Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
@@ -35,7 +35,8 @@ public class SpeechManager : IMessageProvider
     public async Task<SpeechSynthesisResult> SpeakAsync(Message message)
     {
         Console.WriteLine($"\"{message.Content}\"");
-        if (clientSoundDeviceSetting.Value == ClientSoundDeviceSetting.SoundDeviceTypes.OpenAirSpeakers)
+        var soundDevice = soundDeviceGetter.Invoke();
+        if (soundDevice == SoundDeviceTypes.OpenAirSpeakers)
             await speechRecognizer.StopContinuousRecognitionAsync();
         var result = await speechSynthesizer.SpeakTextAsync(message.Content);
         CheckForInterruption(message);
@@ -50,7 +51,7 @@ public class SpeechManager : IMessageProvider
                 Console.WriteLine($"CANCELED: Did you set the speech resource key and region values?");
             }
         }
-        if (clientSoundDeviceSetting.Value == ClientSoundDeviceSetting.SoundDeviceTypes.OpenAirSpeakers)
+        if (soundDevice == SoundDeviceTypes.OpenAirSpeakers)
             await speechRecognizer.StartContinuousRecognitionAsync();
         return result;
     }

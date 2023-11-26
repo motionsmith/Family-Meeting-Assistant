@@ -16,24 +16,24 @@ class Program
     private static DictationMessageProvider? dictationMessageProvider;
     private static TimeMessageProvider timeMessageProvider = new TimeMessageProvider();
     private static WeatherMessageProvider? weatherMessageProvider;
-    private static ClientSoundDeviceSetting? clientSoundDeviceSetting;
     private static SpeechManager? speechManager;
     private static SpeechRecognizer? speechRecognizer;
     private static ChatManager chatManager = new();
     private static OpenAIApi openAIApi = new();
     private static CircumstanceManager? circumstanceManager;
     private static MessageProviderManager? messageProviderManager;
+    private static SettingsManager? settingsManager;
     private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(100);
 
-    // TODO During open air mode, use a keyboard button or something to be able to interrupt the speech synthesis.
-    // TODO Text input mode
     // TODO Add tool setting to change the gpt model
+    // TODO Evaluate ways of reducing chat history length to ~30 messages. E.g. When 30 chats accumulate, use a GPT to summarize them into one message.
+    // TODO Add a setting for Client name.
 
     // Three interaction modes
-    
+
     /*
     1. **Active Mode** – The AI can listen and respond without needing a wake word. Can still be used passively by telling it how to behave.
-    2. **Mute AI Mode** – The AI listens passively and only responds when the wake word is used. This is like Active mode except the dictation message is not enough for the AI to respond. The message must also contain the wake word.
+    2. **Mute AI Mode** – The AI listens passively and only responds when the wake word is used. This is like Active mode except the dictation message is not enough for the AI to respond. The message must also contain the wake word. Will be effective at reducing model API consts.
     3. **Mute User Mode** – The AI does not listen or respond until it is reactivated, possibly through a different interface or command. This is how Google Home works
     */
     // TODO Write prompts for the AI to teach the user about these modes.
@@ -53,83 +53,85 @@ class Program
         audioConfig = AudioConfig.FromDefaultMicrophoneInput();
         speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
         speechSynthesizer = new SpeechSynthesizer(speechConfig);
-        
+
+        // Settings
+        settingsManager = await SettingsManager.CreateInstance(new SettingConfig[] {
+            ClientSoundDeviceSetting.SettingConfig
+        }, new CancellationTokenSource().Token);
+        var soundDeviceSettingGetter = settingsManager.GetterFor<ClientSoundDeviceSetting, SoundDeviceTypes>();
+
         dictationMessageProvider = new DictationMessageProvider(speechRecognizer, speechSynthesizer);
-        
-        clientSoundDeviceSetting = await ClientSoundDeviceSetting.CreateAsync(new CancellationTokenSource().Token);
-        speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, clientSoundDeviceSetting);
-        KeyboardSpeechInterrupter.StartKeyboardInterrupter(speechManager, new CancellationTokenSource().Token); 
+        AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
+        {
+            await dictationMessageProvider.StopContinuousRecognitionAsync();
+        };
+        speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, soundDeviceSettingGetter);
+        KeyboardSpeechInterrupter.StartKeyboardInterrupter(speechManager, new CancellationTokenSource().Token);
         weatherMessageProvider = new WeatherMessageProvider(config["OWM_KEY"], () => new(Lat, Long));
-        
-        
-        
+
+
+
 
         circumstanceManager = new CircumstanceManager(new Circumstance[] {
             new SmithsonianDefaultCircumstance(
-                weatherMessageProvider, 
-                clientSoundDeviceSetting)
+                weatherMessageProvider,
+                settingsManager)
         });
 
         messageProviderManager = new MessageProviderManager(new IMessageProvider[] {
             dictationMessageProvider,
             weatherMessageProvider,
             timeMessageProvider,
-            clientSoundDeviceSetting,
+            settingsManager,
             speechManager
         });
-
-        AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
-        {
-            await dictationMessageProvider.StopContinuousRecognitionAsync();
-        };
-
         var cts = new CancellationTokenSource();
         var tkn = cts.Token;
-            await ChoreManager.LoadAsync(tkn);
-            await circumstanceManager.LoadStateAsync(tkn);
-            await chatManager.LoadAsync(tkn);
+        await ChoreManager.LoadAsync(tkn);
+        await circumstanceManager.LoadStateAsync(tkn);
+        await chatManager.LoadAsync(tkn);
 
-            chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
+        chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
 
-            Console.WriteLine("Speak into your microphone.");
-            await dictationMessageProvider.StartContinuousRecognitionAsync();
-            while (true)
+        Console.WriteLine("Speak into your microphone.");
+        await dictationMessageProvider.StartContinuousRecognitionAsync();
+        while (true)
+        {
+            try
             {
-                try
-                {
-                    tkn = cts.Token;
-                    Stopwatch stopwatch = Stopwatch.StartNew();
+                tkn = cts.Token;
+                Stopwatch stopwatch = Stopwatch.StartNew();
 
-                    var allNewMessages = await messageProviderManager.GetNewMessagesAsync(cts);
-                    chatManager.AddMessages(allNewMessages);
-                    if (allNewMessages.Count() > 0)
-                    {
-                        // DEBUG
-                        foreach (var message in allNewMessages.Where(m => m.Role == Role.User))
-                        {
-                            Console.WriteLine($"[Mic] \"{message.Content}\"");
-                        }
-                        foreach (var message in allNewMessages.Where(m => m.Role == Role.System))
-                        {
-                            Console.WriteLine($"[System] {message.Content}");
-                        }
-                        await TryCompleteChat(true, true, tkn);
-                    }
-                    stopwatch.Stop();
-                    if (stopwatch.Elapsed < loopMinDuration)
-                    {
-                        await Task.Delay(loopMinDuration - stopwatch.Elapsed, tkn);
-                    }
-                }
-                catch (TaskCanceledException ex)
+                var allNewMessages = await messageProviderManager.GetNewMessagesAsync(cts);
+                chatManager.AddMessages(allNewMessages);
+                if (allNewMessages.Count() > 0)
                 {
-                    Console.WriteLine($"Loop cancelled. Enforcing 1s loop delay");
-                    await chatManager.SaveAsync(new CancellationTokenSource().Token);
-                    await Task.Delay(1000);
-                    cts = new CancellationTokenSource();
+                    // DEBUG
+                    foreach (var message in allNewMessages.Where(m => m.Role == Role.User))
+                    {
+                        Console.WriteLine($"[Mic] \"{message.Content}\"");
+                    }
+                    foreach (var message in allNewMessages.Where(m => m.Role == Role.System))
+                    {
+                        Console.WriteLine($"[System] {message.Content}");
+                    }
+                    await TryCompleteChat(true, true, tkn);
                 }
-
+                stopwatch.Stop();
+                if (stopwatch.Elapsed < loopMinDuration)
+                {
+                    await Task.Delay(loopMinDuration - stopwatch.Elapsed, tkn);
+                }
             }
+            catch (TaskCanceledException ex)
+            {
+                Console.WriteLine($"Loop cancelled. Enforcing 1s loop delay");
+                await chatManager.SaveAsync(new CancellationTokenSource().Token);
+                await Task.Delay(1000);
+                cts = new CancellationTokenSource();
+            }
+
+        }
     }
 
     private static async Task TryCompleteChat(bool allowRecursion, bool allowTools, CancellationToken tkn)
@@ -153,7 +155,7 @@ class Program
                 Content = ex.Message
             };
         }
-        
+
         if (assistantMessage != null) // Null occurs during TaskCancelledException
         {
             var toolMessages = await HandleAssistantMessage(assistantMessage, tkn);
@@ -169,7 +171,7 @@ class Program
                 }
             }
         }
-        
+
     }
 
     private static async Task<IEnumerable<Message>> HandleAssistantMessage(Message message, CancellationToken cancelToken)

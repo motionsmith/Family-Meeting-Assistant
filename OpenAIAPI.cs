@@ -75,7 +75,7 @@ public class OpenAIApi
                 { "OpenAI-Organization", config["OPENAI_ORG"] }
             }
         };
-        //Console.WriteLine(requestJson);
+        // Console.WriteLine(requestJson);
         
         var response = await httpClient.SendAsync(request, cancelToken);
         if (response.IsSuccessStatusCode == false)
