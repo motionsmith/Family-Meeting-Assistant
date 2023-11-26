@@ -1,10 +1,10 @@
 using System.Diagnostics;
 
-public class TimeMessenger
+public class TimeMessageProvider : IMessageProvider
 {
-    private static DateTime lastReport = DateTime.UnixEpoch;
+    private DateTime lastReport = DateTime.UnixEpoch;
 
-    public static Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationToken cancelToken)
+    public Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
     {
         var messages = new List<Message>();
         var now = DateTime.Now;
@@ -15,7 +15,7 @@ public class TimeMessenger
             messages.Add(new Message
             {
                 Role = Role.System,
-                Content = $"{DateTime.Now}"
+                Content = $"{DateTime.Now}\nThe System time update is for your information. You remain silent \"...\" unless this update is significant."
             });
             lastReport = now;
         }

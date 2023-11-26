@@ -36,9 +36,11 @@ public class SmithsonianDefaultCircumstance : Circumstance
     private string introPrompt = ErrorPrompt;
     private string defaultContextPrompt = ErrorPrompt;
 
-    public SmithsonianDefaultCircumstance(OpenWeatherMapClient owmClient)
+    public SmithsonianDefaultCircumstance(WeatherMessageProvider owmClient, ClientSoundDeviceSetting clientSoundDeviceSetting)
     {
         Tools.Add(owmClient.GetCurrentLocalWeatherTool);
+        Tools.Add(clientSoundDeviceSetting.GetSettingTool);
+        Tools.Add(clientSoundDeviceSetting.SetSettingTool);
     }
 
     public override int GetCircumstanceExitCondition(Message msg)

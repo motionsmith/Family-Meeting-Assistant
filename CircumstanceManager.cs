@@ -42,11 +42,9 @@
 
     private readonly string fileName = "current-circumstances.csv";
 
-    public CircumstanceManager(OpenWeatherMapClient owmClient)
+    public CircumstanceManager(IEnumerable<Circumstance> circumstances)
     {
-        Circumstances = new List<Circumstance> {
-            new SmithsonianDefaultCircumstance(owmClient)
-        };
+        Circumstances = circumstances.ToList();
     }
 
     public async Task UpdateCurrentCircumstance(Message assistantMessage, CancellationToken cancelToken)

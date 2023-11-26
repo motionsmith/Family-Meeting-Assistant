@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-public class OpenWeatherMapClient
+public class WeatherMessageProvider : IMessageProvider
 {
     public Tool GetCurrentLocalWeatherTool = new Tool
     {
@@ -21,7 +21,7 @@ public class OpenWeatherMapClient
     private Func<Tuple<double, double>> locationProvider; 
     private DateTime lastReport = DateTime.UnixEpoch;
 
-    public OpenWeatherMapClient(string apiKey, Func<Tuple<double, double>> locationProvider)
+    public WeatherMessageProvider(string apiKey, Func<Tuple<double, double>> locationProvider)
     {
         _apiKey = apiKey;
         _httpClient = new HttpClient();
@@ -42,14 +42,14 @@ public class OpenWeatherMapClient
     {
         var responseBody = await GetWeatherAsync(cancelToken);
         return new Message {
-            Content = $"### Weather update:\n\n{responseBody}\nThe Client prefers fahrenheit units.",
+            Content = $"### Weather update on demand:\n\n{responseBody}\nThe Client prefers fahrenheit units. You follow up.",
             Role = Role.Tool,
             ToolCallId = toolCall.Id,
             FollowUp = true
         };
     }
 
-    internal async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationToken tkn)
+    public async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
     {
         var messages = new List<Message>();
         var now = DateTime.Now;
@@ -57,11 +57,11 @@ public class OpenWeatherMapClient
         var thres = TimeSpan.FromMinutes(60);
         if (duration > thres)
         {
-            var reportContent = await GetWeatherAsync(tkn);
+            var reportContent = await GetWeatherAsync(cts.Token);
             messages.Add(new Message
             {
                 Role = Role.System,
-                Content = $"### Hourly weather update\n\n{reportContent}\nThe Client prefers fahrenheit units."
+                Content = $"### Hourly system weather update\n\n{reportContent}\nThe Client prefers fahrenheit units.\nYou remain silent \"...\" unless this update is significant."
             });
             lastReport = now;
         }

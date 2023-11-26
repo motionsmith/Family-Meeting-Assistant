@@ -2,7 +2,7 @@
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
 
-public class DictationMessageProvider
+public class DictationMessageProvider : IMessageProvider
 {
     private SpeechRecognizer speechRecognizer;
     private SpeechSynthesizer speechSynthesizer;

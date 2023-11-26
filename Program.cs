@@ -14,20 +14,20 @@ class Program
     private static SpeechSynthesizer? speechSynthesizer;
     private static AudioConfig? audioConfig;
     private static DictationMessageProvider? dictationMessageProvider;
+    private static TimeMessageProvider timeMessageProvider = new TimeMessageProvider();
+    private static WeatherMessageProvider? weatherMessageProvider;
+    private static ClientSoundDeviceSetting? clientSoundDeviceSetting;
     private static SpeechManager? speechManager;
     private static SpeechRecognizer? speechRecognizer;
     private static ChatManager chatManager = new();
     private static OpenAIApi openAIApi = new();
-    private static OpenWeatherMapClient? openWeatherMapClient;
     private static CircumstanceManager? circumstanceManager;
+    private static MessageProviderManager? messageProviderManager;
     private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(100);
 
-    // TODO NEEDS TESTING After an interruption, cannot send out another comption request until some pentalty duration.
-    // TODO Support for both Airpods and open air mode. Open Air mode is required to silence the mic while assistant is talking.
     // TODO During open air mode, use a keyboard button or something to be able to interrupt the speech synthesis.
-    // TODO Silent mode - only requests chat completion after a wake word
     // TODO Text input mode
-    // TODO Create a IMessageProvider interface to expose GetNewMessagesAsync calls (for weather, time, dictation, etc) ——will allow assistant to chime due to messages besides dictation recognition.
+    // TODO Add tool setting to change the gpt model
 
     // Three interaction modes
     
@@ -53,11 +53,30 @@ class Program
         audioConfig = AudioConfig.FromDefaultMicrophoneInput();
         speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
         speechSynthesizer = new SpeechSynthesizer(speechConfig);
+        
         dictationMessageProvider = new DictationMessageProvider(speechRecognizer, speechSynthesizer);
-        speechManager = new SpeechManager(speechRecognizer, speechSynthesizer);
+        
+        clientSoundDeviceSetting = await ClientSoundDeviceSetting.CreateAsync(new CancellationTokenSource().Token);
+        speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, clientSoundDeviceSetting);
+        KeyboardSpeechInterrupter.StartKeyboardInterrupter(speechManager, new CancellationTokenSource().Token); 
+        weatherMessageProvider = new WeatherMessageProvider(config["OWM_KEY"], () => new(Lat, Long));
+        
+        
+        
 
-        openWeatherMapClient = new OpenWeatherMapClient(config["OWM_KEY"], () => new(Lat, Long));
-        circumstanceManager = new CircumstanceManager(openWeatherMapClient);
+        circumstanceManager = new CircumstanceManager(new Circumstance[] {
+            new SmithsonianDefaultCircumstance(
+                weatherMessageProvider, 
+                clientSoundDeviceSetting)
+        });
+
+        messageProviderManager = new MessageProviderManager(new IMessageProvider[] {
+            dictationMessageProvider,
+            weatherMessageProvider,
+            timeMessageProvider,
+            clientSoundDeviceSetting,
+            speechManager
+        });
 
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
         {
@@ -72,12 +91,6 @@ class Program
 
             chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
 
-            // The system message that gets added for each app launch
-            chatManager.Messages.Add(circumstanceManager.PlayerJoinedMessage);
-
-            // This message will allow the Assistant to have the first word.
-            if (true) await TryCompleteChat(false, false, tkn);
-
             Console.WriteLine("Speak into your microphone.");
             await dictationMessageProvider.StartContinuousRecognitionAsync();
             while (true)
@@ -86,17 +99,20 @@ class Program
                 {
                     tkn = cts.Token;
                     Stopwatch stopwatch = Stopwatch.StartNew();
-                    var newUserDictatedMessages = await dictationMessageProvider.GetNewMessagesAsync(cts);
-                    if (newUserDictatedMessages.Count() > 0)
+
+                    var allNewMessages = await messageProviderManager.GetNewMessagesAsync(cts);
+                    chatManager.AddMessages(allNewMessages);
+                    if (allNewMessages.Count() > 0)
                     {
-                        foreach (var message in newUserDictatedMessages)
+                        // DEBUG
+                        foreach (var message in allNewMessages.Where(m => m.Role == Role.User))
                         {
-                            Console.WriteLine($"Heard \"{message.Content}\"");
+                            Console.WriteLine($"[Mic] \"{message.Content}\"");
                         }
-                        chatManager.AddMessages(await TimeMessenger.GetNewMessagesAsync(tkn));
-                        chatManager.AddMessages(await openWeatherMapClient.GetNewMessagesAsync(tkn));
-                        chatManager.AddMessages(newUserDictatedMessages);
-                        Console.WriteLine($"[System] Waiting for response...");
+                        foreach (var message in allNewMessages.Where(m => m.Role == Role.System))
+                        {
+                            Console.WriteLine($"[System] {message.Content}");
+                        }
                         await TryCompleteChat(true, true, tkn);
                     }
                     stopwatch.Stop();
@@ -118,6 +134,8 @@ class Program
 
     private static async Task TryCompleteChat(bool allowRecursion, bool allowTools, CancellationToken tkn)
     {
+        Console.WriteLine($"[Debug] Waiting for response...");
+
         Message? assistantMessage = null;
         try
         {
@@ -125,7 +143,7 @@ class Program
         }
         catch (TaskCanceledException ex)
         {
-            Console.WriteLine($"ChatCompletion request was cancelled.");
+            Console.WriteLine($"[Debug] ChatCompletion request was cancelled.");
         }
         catch (Exception ex)
         {
@@ -136,7 +154,7 @@ class Program
             };
         }
         
-        if (assistantMessage != null)
+        if (assistantMessage != null) // Null occurs during TaskCancelledException
         {
             var toolMessages = await HandleAssistantMessage(assistantMessage, tkn);
             await circumstanceManager.UpdateCurrentCircumstance(assistantMessage, tkn);
@@ -159,19 +177,10 @@ class Program
         var results = new List<Message>();
 
         // Handle speaking
-        bool assistantSpoke = false;
         bool calledTools = message.ToolCalls != null && message.ToolCalls.Count > 0;
         if (message.Content != null)
         {
             var speechResult = await speechManager.SpeakAsync(message);
-            var speechResultMessage = speechManager.OutputSpeechSynthesisResult(speechResult, message);
-            if (speechResultMessage != null)
-            {
-                Console.WriteLine($"Assistant was interrupted.");
-                results.Add(speechResultMessage);
-                chatManager.AddMessage(speechResultMessage);
-            }
-            assistantSpoke = speechResult.Reason == ResultReason.SynthesizingAudioCompleted;
         }
 
         // Add message
