@@ -25,6 +25,7 @@ class Program
 
     // TODO Evaluate ways of reducing chat history length to ~30 messages. E.g. When 30 chats accumulate, use a GPT to summarize them into one message.
     // TODO Add a tool setting for Client name.
+    // TODO Make tasks completable by task index (or line number). This will be more reliable.
 
     // Three interaction modes
 
@@ -39,17 +40,16 @@ class Program
 
     async static Task Main(string[] args)
     {
+        // User secrets
         config = new ConfigurationBuilder()
             .AddUserSecrets<Program>()
             .Build();
 
-        // Speech stuff has to be configured in Main
-        speechConfig = SpeechConfig.FromSubscription(config["SPEECH_KEY"], config["SPEECH_REGION"]);
-        speechConfig.SpeechSynthesisVoiceName = JustStrings.VOICE_NAME;
-        speechConfig.SpeechRecognitionLanguage = "en-US";
-        audioConfig = AudioConfig.FromDefaultMicrophoneInput();
-        speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
-        speechSynthesizer = new SpeechSynthesizer(speechConfig);
+        // Weather
+        weatherMessageProvider = new WeatherMessageProvider(config["OWM_KEY"], () => new(Lat, Long));
+
+        // Task list
+        await ChoreManager.LoadAsync(new CancellationTokenSource().Token);
 
         // Settings
         settingsManager = await SettingsManager.CreateInstance(new SettingConfig[] {
@@ -59,15 +59,24 @@ class Program
         var soundDeviceSettingGetter = settingsManager.GetterFor<ClientSoundDeviceSetting, SoundDeviceTypes>();
         var gptModelSettingGetter = settingsManager.GetterFor<GptModelSetting, GptModel>();
 
+        // Speech
+        speechConfig = SpeechConfig.FromSubscription(config["SPEECH_KEY"], config["SPEECH_REGION"]);
+        speechConfig.SpeechSynthesisVoiceName = JustStrings.VOICE_NAME;
+        speechConfig.SpeechRecognitionLanguage = "en-US";
+        audioConfig = AudioConfig.FromDefaultMicrophoneInput();
+        speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
+        speechSynthesizer = new SpeechSynthesizer(speechConfig);
+        speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, soundDeviceSettingGetter);
+        var _ = KeyboardSpeechInterrupter.StartKeyboardInterrupter(speechManager);
+
+        // Dictation
         dictationMessageProvider = new DictationMessageProvider(speechRecognizer, speechSynthesizer);
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
         {
             await dictationMessageProvider.StopContinuousRecognitionAsync();
         };
-        speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, soundDeviceSettingGetter);
-        KeyboardSpeechInterrupter.StartKeyboardInterrupter(speechManager);
-        weatherMessageProvider = new WeatherMessageProvider(config["OWM_KEY"], () => new(Lat, Long));
 
+        // Circumstances (prompt state)
         circumstanceManager = await CircumstanceManager.CreateAsync(new Circumstance[] {
             new SmithsonianDefaultCircumstance(
                 weatherMessageProvider,
@@ -76,6 +85,7 @@ class Program
         (msg) => { chatManager.PinnedMessage = msg; },
         new CancellationTokenSource().Token);
 
+        // Chat management
         chatManager = await ChatManager.CreateAsync(
             new List<IChatObserver>() {
                 speechManager,
@@ -89,15 +99,11 @@ class Program
                 settingsManager,
                 speechManager
             },
-            () => circumstanceManager.Tools,
+            toolsDel: () => circumstanceManager.Tools,
             gptModelSettingGetter,
             new CancellationTokenSource().Token);
 
-        await ChoreManager.LoadAsync(new CancellationTokenSource().Token);
-
         Console.WriteLine("Speak into your microphone.");
-        await dictationMessageProvider.StartContinuousRecognitionAsync();
-        var chatUpdateCheckerTask = chatManager.StartContinuousUpdatesAsync();
-        await chatUpdateCheckerTask;
+        await chatManager.StartContinuousUpdatesAsync();
     }
 }
