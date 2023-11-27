@@ -117,16 +117,8 @@ public class ChatManager
     private async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cancelTokenSource)
     {
         var getNewMessagesTasks = messageProviders.Select(mp => mp.GetNewMessagesAsync(cancelTokenSource));
-        try
-        {
-            var results = await Task.WhenAll(getNewMessagesTasks);
-            return results.SelectMany(messages => messages);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.Message);
-            return null;
-        }
+        var results = await Task.WhenAll(getNewMessagesTasks);
+        return results.SelectMany(messages => messages);
     }
 }
 

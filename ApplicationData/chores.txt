@@ -1,5 +1,1 @@
-After an interruption,null
-Support for both Airpods and open air mode. Open Air mode is required to silence the mic while assistant is talking,null
-During open air mode,null
-Silent mode - only requests chat completion after a wake wor,null
-Text input mode,null
+Guhhh,null
