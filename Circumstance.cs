@@ -1,4 +1,5 @@
-﻿public abstract class Circumstance
+﻿
+public abstract class Circumstance
 {
     public abstract List<Tool> Tools {get;}
     protected abstract string SaveFileName {get; }
@@ -15,8 +16,6 @@
 
     public abstract Task LoadStateAsync(CancellationToken cancelToken);
 
-    public abstract int GetCircumstanceExitCondition(Message mesage);
-
     protected async Task<string> LoadPromptAsync(string fileName, CancellationToken cancelToken)
     {
         var prompt = await StringIO.LoadStateAsync(ErrorPrompt, fileName, cancelToken);
@@ -31,6 +30,11 @@
                 .Replace(Environment.NewLine, "\\n")
                 .Replace("[[ASSISTANT_NAME]]", JustStrings.ASSISTANT_NAME)
                 .Replace("[[NOW]]", DateTime.Now.ToString());
+    }
+
+    public virtual void OnNewMessages(IEnumerable<Message> messages, Action<int> exitCallback)
+    {
+        
     }
 
     public virtual Message PlayerJoinedMessage

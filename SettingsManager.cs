@@ -52,8 +52,16 @@ public class SettingsManager : IMessageProvider
     public async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
     {
         var tasks = settings.Select(setting => setting.GetNewMessagesAsync(cts));
-        var results = await Task.WhenAll(tasks);
-        return results.SelectMany(messages => messages);
+        try
+        {
+            var results = await Task.WhenAll(tasks);
+            return results.SelectMany(messages => messages);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            return null;
+        }
     }
 
     private Task Balaa(ISetting setting, int arg2)

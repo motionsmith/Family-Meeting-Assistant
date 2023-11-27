@@ -2,7 +2,7 @@
 using System.Collections.Concurrent;
 using Microsoft.CognitiveServices.Speech;
 
-public class SpeechManager : IMessageProvider
+public class SpeechManager : IMessageProvider, IChatObserver
 {
     private SpeechRecognizer speechRecognizer;
     private SpeechSynthesizer speechSynthesizer;
@@ -26,15 +26,27 @@ public class SpeechManager : IMessageProvider
         return Task.FromResult(newMessages.AsEnumerable());
     }
 
-    public async Task InterruptSpeaking(CancellationToken cancelToken)
+    public void InterruptSpeaking()
     {
         wasInterrupted = true;
-        speechSynthesizer.StopSpeakingAsync();
+        Console.WriteLine("Begin stop speaking");
+        speechSynthesizer.StopSpeakingAsync().ContinueWith((task) => Console.WriteLine("End stop speaking"));
+    }
+
+    public void OnNewMessages(IEnumerable<Message> messages)
+    {
+        messages = messages.Where(m => m.Role == Role.Assistant && string.IsNullOrEmpty(m.Content) == false);
+        var speakTask = Task.Run(async () =>
+        {
+            foreach (var message in messages)
+            {
+                var speechResult = await SpeakAsync(message);
+            }
+        });
     }
 
     public async Task<SpeechSynthesisResult> SpeakAsync(Message message)
     {
-        Console.WriteLine($"\"{message.Content}\"");
         var soundDevice = soundDeviceGetter.Invoke();
         if (soundDevice == SoundDeviceTypes.OpenAirSpeakers)
             await speechRecognizer.StopContinuousRecognitionAsync();

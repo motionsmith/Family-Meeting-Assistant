@@ -1,5 +1,17 @@
-﻿public class CircumstanceManager
+﻿public class CircumstanceManager : IChatObserver
 {
+    public static async Task<CircumstanceManager> CreateAsync(IEnumerable<Circumstance> circumstances, Action<Message> setPinnedMessageDel, CancellationToken cancelToken)
+    {
+        var fileContents = await StringIO.LoadStateAsync("0,0", fileName, cancelToken);
+        foreach (var circustance in circumstances)
+        {
+            await circustance.LoadStateAsync(cancelToken);
+        }
+        return new CircumstanceManager(circumstances, fileContents, setPinnedMessageDel);
+    }
+
+    private static readonly string fileName = "current-circumstances.csv";
+
     public Circumstance CurrentCircumstance
     {
         get
@@ -7,14 +19,14 @@
             for (int i = 0; i < State.Count; i++)
             {
                 if (State[i] == 0)
-                return Circumstances[i];
+                    return Circumstances[i];
             }
             return Circumstances.Last();
             //throw new NotImplementedException("Need to implement this condition. Some sort of End of game scenario.");
         }
     }
 
-    public List<int> State = new List<int> {  0, 0 };
+    public List<int> State = new List<int> { 0, 0 };
 
     public readonly List<Circumstance> Circumstances;
 
@@ -27,7 +39,7 @@
         set
         {
             var vals = value.Split(',');
-            for (int i = 0 ; i < vals.Length; i++)
+            for (int i = 0; i < vals.Length; i++)
             {
                 State[i] = int.Parse(vals[i]);
             }
@@ -39,17 +51,23 @@
     public Message PinnedMessage => CurrentCircumstance.PinnedMessage;
 
     public Message PlayerJoinedMessage => CurrentCircumstance.PlayerJoinedMessage;
+    
+    private Action<Message> setPinnedMessageDel;
 
-    private readonly string fileName = "current-circumstances.csv";
-
-    public CircumstanceManager(IEnumerable<Circumstance> circumstances)
+    private CircumstanceManager(IEnumerable<Circumstance> circumstances, string initialValue, Action<Message> setPinnedMessageDel)
     {
         Circumstances = circumstances.ToList();
+        StateString = initialValue;
+        this.setPinnedMessageDel = setPinnedMessageDel;
     }
 
-    public async Task UpdateCurrentCircumstance(Message assistantMessage, CancellationToken cancelToken)
+    public void SaveAsync()
     {
-        var exitVal = CurrentCircumstance.GetCircumstanceExitCondition(assistantMessage);
+        var _ = StringIO.SaveStateAsync(StateString, fileName, new CancellationTokenSource().Token);
+    }
+
+    private void ChangeCircumstance(int exitVal)
+    {
         if (exitVal != 0)
         {
             for (int i = 0; i < State.Count; i++)
@@ -57,24 +75,16 @@
                 if (State[i] == 0)
                 {
                     State[i] = exitVal;
-                    await SaveAsync(cancelToken);
+                    SaveAsync();
                     break; // Break out of the loop after modifying the first 0
                 }
             }
         }
     }
 
-    public async Task LoadStateAsync(CancellationToken cancelToken)
+    public void OnNewMessages(IEnumerable<Message> messages)
     {
-        StateString = await StringIO.LoadStateAsync(StateString, fileName, cancelToken);
-        foreach (var circustance in Circumstances)
-        {
-            await circustance.LoadStateAsync(cancelToken);
-        }
-    }
-
-    public async Task SaveAsync(CancellationToken cancelToken)
-    {
-        await StringIO.SaveStateAsync(StateString, fileName, cancelToken);
+        CurrentCircumstance.OnNewMessages(messages, ChangeCircumstance);
+        setPinnedMessageDel.Invoke(CurrentCircumstance.PinnedMessage);
     }
 }

@@ -42,11 +42,6 @@ public class SmithsonianDefaultCircumstance : Circumstance
         Tools.AddRange(settingsManager.SettingsTools);
     }
 
-    public override int GetCircumstanceExitCondition(Message msg)
-    {
-        return 0;
-    }
-
     public override async Task LoadStateAsync(CancellationToken cancelToken)
     {
         SaveString = await StringIO.LoadStateAsync(SaveString, SaveFileName, cancelToken);

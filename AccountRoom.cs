@@ -261,14 +261,16 @@ public class AccountRoom : Circumstance
         return Task.FromResult(msg);
     }
 
-    public override int GetCircumstanceExitCondition(Message msg)
+    public override void OnNewMessages(IEnumerable<Message> messages, Action<int> exitCallback)
     {
         string pattern = @"(?i:(?<![\'""])(potatoes)(?![\'""]))";
-
-        bool messageContainsLiteral = string.IsNullOrEmpty(msg.Content) == false && Regex.IsMatch(msg.Content, pattern);
-        bool assisantSaidMagicWord = msg.Role == Role.Assistant && messageContainsLiteral;
-        if (assisantSaidMagicWord || accountCreated) return 1;
-        return 0;
+        messages = messages.Where(m => m.Role == Role.Assistant);
+        foreach (var msg in messages)
+        {
+            bool messageContainsLiteral = string.IsNullOrEmpty(msg.Content) == false && Regex.IsMatch(msg.Content, pattern);
+            bool assisantSaidMagicWord = messageContainsLiteral;
+            if (assisantSaidMagicWord || accountCreated) exitCallback.Invoke(1);
+        }
     }
 
     public override async Task LoadStateAsync(CancellationToken cancelToken)

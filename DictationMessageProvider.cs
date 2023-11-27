@@ -18,6 +18,7 @@ public class DictationMessageProvider : IMessageProvider
         this.speechSynthesizer = speechSynthesizer;
 
         speechSynthesizer.SynthesisCanceled += OnSynthCancelled;
+        speechSynthesizer.SynthesisCompleted += OnSynthCompleted;
         
         speechRecognizer.Recognizing += CancelSynthesis;
         
@@ -58,9 +59,13 @@ public class DictationMessageProvider : IMessageProvider
         };
     }
 
+    private void OnSynthCompleted(object? sender, SpeechSynthesisEventArgs e)
+    {
+        cancelSynthTask = null;
+    }
+
     private void OnSynthCancelled(object? sender, SpeechSynthesisEventArgs e)
     {
-        Console.WriteLine("[Dictation] Synth task cancellation complete");
         cancelSynthTask = null;
     }
 

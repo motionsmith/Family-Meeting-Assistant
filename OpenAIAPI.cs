@@ -2,37 +2,41 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
+using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using System.Runtime.Serialization;
 
-public class OpenAIApi
+public class OpenAIApi : IMessageProvider, IChatObserver
 {
     private readonly HttpClient httpClient = new HttpClient();
 
     private readonly string chatCompletionPrompt;
     private readonly string toolCallPrompt;
     private IConfiguration? config;
-    
-    public OpenAIApi()
+    private ConcurrentQueue<Message> messageQueue = new();
+    private Task<OpenAIApiResponse>? completeChatTask;
+    private CancellationTokenSource completeChatCts;
+    private Func<List<Tool>> toolsDelegate;
+    private Func<List<Message>> messagesDelegate;
+
+    public OpenAIApi(Func<List<Tool>> toolsDel, Func<List<Message>> messagesDel)
     {
+        toolsDelegate = toolsDel;
+        messagesDelegate = messagesDel;
         config = new ConfigurationBuilder()
             .AddUserSecrets<Program>()
             .Build();
 
         httpClient.Timeout = TimeSpan.FromSeconds(15);
-        
-        chatCompletionPrompt = "\n\n## [[ASSISTANT_NAME]]s instructions for speaking\n\n";
-        chatCompletionPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that The Client can hear you.";
-        chatCompletionPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
-        chatCompletionPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
-        chatCompletionPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
-        chatCompletionPrompt += "\nSince you can only read the transcription, you can only use intuition to figure out who is speaking. Feel free to ask for clarification, but only when necessary, as this is an interruption.";
-        chatCompletionPrompt += "\nWhen speaking, be straightforward, not overly nice.";
-        chatCompletionPrompt += "\nDo not bother to tell us that you are available to help because we already know you're here.";
 
-        toolCallPrompt = "\n\n## [[ASSISTANT_NAME]]'s instructions for function calling\n\n";
-        toolCallPrompt += "\nYou always output JSON to call functions.";
-        toolCallPrompt += "\nThe JSON you output will be interpreted by the client and a function will be executed on your behalf.";
+        toolCallPrompt = "\n\n## [[ASSISTANT_NAME]]s instructions for speaking\n\n";
+        toolCallPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that The Client can hear you.";
+        toolCallPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
+        toolCallPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
+        toolCallPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
+        toolCallPrompt += "\nSince you can only read the transcription, you can only use intuition to figure out who is speaking. Feel free to ask for clarification, but only when necessary, as this is an interruption.";
+        toolCallPrompt += "\nWhen speaking, be straightforward, not overly nice.";
+        toolCallPrompt += "\nDo not bother to tell us that you are available to help because we already know you're here.";
 
         toolCallPrompt += "## [[ASSISTANT_NAME]]s instructions for speaking\n\n";
         toolCallPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
@@ -50,8 +54,19 @@ public class OpenAIApi
         toolCallPrompt += "\nWhen speaking, be straightforward, not overly nice. You do not bother with passive comments like \"If you need anything, just let me know.\" or \"Is there anything else I can help you with?\"";
     }
 
-    private async Task<OpenAIApiResponse> CompleteChatAsync(IEnumerable<Message> messages, CancellationToken cancelToken, ResponseFormat? responseFormat = null, List<Tool>? tools = null)
+    private async Task<OpenAIApiResponse> CompleteChatAsync(List<Message> messages, CancellationToken cancelToken, ResponseFormat? responseFormat = null, List<Tool>? tools = null)
     {
+        var allowTools = tools != null && tools.Count > 0;
+
+        if (allowTools)
+        {
+            messages[0].Content += toolCallPrompt;
+        }
+        else
+        {
+            messages[0].Content += toolCallPrompt; // Identical either way for now
+        }
+
         var next = new ChatCompletionRequest
         {
             Model = JustStrings.CHAT_MODEL,
@@ -75,8 +90,8 @@ public class OpenAIApi
                 { "OpenAI-Organization", config["OPENAI_ORG"] }
             }
         };
-        // Console.WriteLine(requestJson);
-        
+        //Console.WriteLine(requestJson);
+
         var response = await httpClient.SendAsync(request, cancelToken);
         if (response.IsSuccessStatusCode == false)
         {
@@ -92,27 +107,82 @@ public class OpenAIApi
         return responseContentObject;
     }
 
-    public async Task<Message> GetChatCompletionAsync(List<Message> messages, CancellationToken tkn, List<Tool> tools)
+    public Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
     {
-        var allowTools = tools != null && tools.Count > 0;
-        if (allowTools)
+        var newMessages = messageQueue.ToArray(); // Garbage
+        messageQueue.Clear();
+        return Task.FromResult(newMessages.AsEnumerable());
+    }
+
+    public void OnNewMessages(IEnumerable<Message> messages)
+    {
+        messages = messages.Where(m => m.Role != Role.Assistant);
+        if (messages.Count() == 0)
+            return;
+
+        if (completeChatCts != null && completeChatCts.IsCancellationRequested == false)
         {
-            messages[0].Content += toolCallPrompt;
+            completeChatCts.Cancel();
+        }
+        completeChatCts = new CancellationTokenSource();
+        completeChatTask = CompleteChatAsync(messagesDelegate.Invoke(), completeChatCts.Token, null, toolsDelegate.Invoke());
+        completeChatTask.ContinueWith(HandleChatCompletion);
+    }
+
+    private async Task HandleChatCompletion(Task<OpenAIApiResponse> completedTask)
+    {
+        if (completedTask.Exception != null)
+        {
+            // Do something when request throws exception?
+            return;
+        }
+        Message message;
+        if (completedTask.Result.Error != null)
+        {
+            message = new Message
+            {
+                Role = Role.System,
+                Content = $"Error from OpenAI API: {completedTask.Result.Error.Message}"
+            };
         }
         else
         {
-            messages[0].Content += chatCompletionPrompt;
+            message = completedTask.Result.Choices[0].Message;
         }
-        
-        var openAiResponse = await CompleteChatAsync(messages, tkn, null, tools);
-        if (openAiResponse.Error == null)
+
+        messageQueue.Enqueue(message);
+
+        // Handle tool calling
+        bool calledTools = message.ToolCalls != null && message.ToolCalls.Count > 0;
+        if (calledTools == false)
         {
-            return openAiResponse.Choices[0].Message;
+            return;
         }
-        return new Message {
-            Role = Role.System,
-            Content = $"Error from OpenAI API: {openAiResponse.Error.Message}"
-        };
+
+        var toolCallsToken = new CancellationTokenSource().Token;
+        foreach (var call in message.ToolCalls)
+        {
+            var functionName = call.Function.Name;
+            var arguments = call.Function.Arguments;
+            Console.WriteLine($"[{JustStrings.ASSISTANT_NAME}] {functionName}({arguments})");
+            Message toolMessage;
+            var tool = toolsDelegate.Invoke().FirstOrDefault(tool => tool.Function.Name == functionName);
+            if (tool != null)
+            {
+                toolMessage = await tool.Execute(call, toolCallsToken);
+            }
+            else
+            {
+                // Handle unknown function
+                toolMessage = new Message
+                {
+                    Content = $"Unknown tool function name {functionName}. Tool call failed.",
+                    ToolCallId = call.Id,
+                    Role = Role.Tool
+                };
+            }
+            messageQueue.Enqueue(toolMessage);
+        }
     }
 }
 

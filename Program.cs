@@ -18,16 +18,14 @@ class Program
     private static WeatherMessageProvider? weatherMessageProvider;
     private static SpeechManager? speechManager;
     private static SpeechRecognizer? speechRecognizer;
-    private static ChatManager chatManager = new();
-    private static OpenAIApi openAIApi = new();
+    private static ChatManager? chatManager;
     private static CircumstanceManager? circumstanceManager;
-    private static MessageProviderManager? messageProviderManager;
     private static SettingsManager? settingsManager;
-    private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(100);
+    private static ConsoleChatObserver consoleChatObserver = new ConsoleChatObserver();
 
     // TODO Add tool setting to change the gpt model
     // TODO Evaluate ways of reducing chat history length to ~30 messages. E.g. When 30 chats accumulate, use a GPT to summarize them into one message.
-    // TODO Add a setting for Client name.
+    // TODO Add a tool setting for Client name.
 
     // Three interaction modes
 
@@ -66,158 +64,38 @@ class Program
             await dictationMessageProvider.StopContinuousRecognitionAsync();
         };
         speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, soundDeviceSettingGetter);
-        KeyboardSpeechInterrupter.StartKeyboardInterrupter(speechManager, new CancellationTokenSource().Token);
+        KeyboardSpeechInterrupter.StartKeyboardInterrupter(speechManager);
         weatherMessageProvider = new WeatherMessageProvider(config["OWM_KEY"], () => new(Lat, Long));
 
-
-
-
-        circumstanceManager = new CircumstanceManager(new Circumstance[] {
+        circumstanceManager = await CircumstanceManager.CreateAsync(new Circumstance[] {
             new SmithsonianDefaultCircumstance(
                 weatherMessageProvider,
                 settingsManager)
-        });
+        },
+        (msg) => { chatManager.PinnedMessage = msg; },
+        new CancellationTokenSource().Token);
 
-        messageProviderManager = new MessageProviderManager(new IMessageProvider[] {
-            dictationMessageProvider,
-            weatherMessageProvider,
-            timeMessageProvider,
-            settingsManager,
-            speechManager
-        });
-        var cts = new CancellationTokenSource();
-        var tkn = cts.Token;
-        await ChoreManager.LoadAsync(tkn);
-        await circumstanceManager.LoadStateAsync(tkn);
-        await chatManager.LoadAsync(tkn);
+        chatManager = await ChatManager.CreateAsync(
+            new List<IChatObserver>() {
+                speechManager,
+                consoleChatObserver,
+                circumstanceManager
+            },
+            new IMessageProvider[] {
+                dictationMessageProvider,
+                weatherMessageProvider,
+                timeMessageProvider,
+                settingsManager,
+                speechManager
+            },
+            () => circumstanceManager.Tools,
+            new CancellationTokenSource().Token);
 
-        chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
+        await ChoreManager.LoadAsync(new CancellationTokenSource().Token);
 
         Console.WriteLine("Speak into your microphone.");
         await dictationMessageProvider.StartContinuousRecognitionAsync();
-        while (true)
-        {
-            try
-            {
-                tkn = cts.Token;
-                Stopwatch stopwatch = Stopwatch.StartNew();
-
-                var allNewMessages = await messageProviderManager.GetNewMessagesAsync(cts);
-                chatManager.AddMessages(allNewMessages);
-                if (allNewMessages.Count() > 0)
-                {
-                    // DEBUG
-                    foreach (var message in allNewMessages.Where(m => m.Role == Role.User))
-                    {
-                        Console.WriteLine($"[Mic] \"{message.Content}\"");
-                    }
-                    foreach (var message in allNewMessages.Where(m => m.Role == Role.System))
-                    {
-                        Console.WriteLine($"[System] {message.Content}");
-                    }
-                    await TryCompleteChat(true, true, tkn);
-                }
-                stopwatch.Stop();
-                if (stopwatch.Elapsed < loopMinDuration)
-                {
-                    await Task.Delay(loopMinDuration - stopwatch.Elapsed, tkn);
-                }
-            }
-            catch (TaskCanceledException ex)
-            {
-                Console.WriteLine($"Loop cancelled. Enforcing 1s loop delay");
-                await chatManager.SaveAsync(new CancellationTokenSource().Token);
-                await Task.Delay(1000);
-                cts = new CancellationTokenSource();
-            }
-
-        }
-    }
-
-    private static async Task TryCompleteChat(bool allowRecursion, bool allowTools, CancellationToken tkn)
-    {
-        Console.WriteLine($"[Debug] Waiting for response...");
-
-        Message? assistantMessage = null;
-        try
-        {
-            assistantMessage = await openAIApi.GetChatCompletionAsync(chatManager.ChatCompletionRequestMessages, tkn, allowTools ? circumstanceManager.Tools : null);
-        }
-        catch (TaskCanceledException ex)
-        {
-            Console.WriteLine($"[Debug] ChatCompletion request was cancelled.");
-        }
-        catch (Exception ex)
-        {
-            assistantMessage = new Message
-            {
-                Role = Role.System,
-                Content = ex.Message
-            };
-        }
-
-        if (assistantMessage != null) // Null occurs during TaskCancelledException
-        {
-            var toolMessages = await HandleAssistantMessage(assistantMessage, tkn);
-            await circumstanceManager.UpdateCurrentCircumstance(assistantMessage, tkn);
-            chatManager.PinnedMessage = circumstanceManager.PinnedMessage;
-            await chatManager.SaveAsync(tkn);
-            if (allowRecursion)
-            {
-                var toolCallsRequireFollowUp = toolMessages.Any(msg => msg.Role == Role.Tool && msg.FollowUp);
-                if (toolCallsRequireFollowUp)
-                {
-                    await TryCompleteChat(false, false, tkn);
-                }
-            }
-        }
-
-    }
-
-    private static async Task<IEnumerable<Message>> HandleAssistantMessage(Message message, CancellationToken cancelToken)
-    {
-        var results = new List<Message>();
-
-        // Handle speaking
-        bool calledTools = message.ToolCalls != null && message.ToolCalls.Count > 0;
-        if (message.Content != null)
-        {
-            var speechResult = await speechManager.SpeakAsync(message);
-        }
-
-        // Add message
-        chatManager.AddMessage(message);
-
-        // Handle tool calling
-        if (calledTools == false)
-        {
-            return new List<Message>();
-        }
-
-        foreach (var call in message.ToolCalls)
-        {
-            var functionName = call.Function.Name;
-            var arguments = call.Function.Arguments;
-            Console.WriteLine($"[{JustStrings.ASSISTANT_NAME}] {functionName}({arguments})");
-            Message toolMessage;
-            var tool = circumstanceManager.Tools.FirstOrDefault(tool => tool.Function.Name == functionName);
-            if (tool != null)
-            {
-                toolMessage = await tool.Execute(call, cancelToken);
-            }
-            else
-            {
-                // Handle unknown function
-                toolMessage = new Message
-                {
-                    Content = $"Unknown tool function name {functionName}. Tool call failed.",
-                    ToolCallId = call.Id,
-                    Role = Role.Tool
-                };
-            }
-            results.Add(toolMessage);
-            chatManager.AddMessage(toolMessage);
-        }
-        return results;
+        var chatUpdateCheckerTask = chatManager.StartContinuousUpdatesAsync();
+        await chatUpdateCheckerTask;
     }
 }

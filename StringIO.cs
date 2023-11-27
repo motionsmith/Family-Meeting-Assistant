@@ -1,12 +1,12 @@
 ﻿public static class StringIO
 {
-    public static async Task<string> LoadStateAsync(string state, string fileName, CancellationToken cancelToken)
+    public static async Task<string> LoadStateAsync(string defaultState, string fileName, CancellationToken cancelToken)
     {
         
         var filePath = GetFilePath(fileName);
         if (File.Exists(filePath) == false)
         {
-            await SaveStateAsync(state, fileName, cancelToken);
+            await SaveStateAsync(defaultState, fileName, cancelToken);
         }
         return await File.ReadAllTextAsync(filePath, cancelToken);
     }
