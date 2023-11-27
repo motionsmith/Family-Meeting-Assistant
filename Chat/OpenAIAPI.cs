@@ -5,13 +5,11 @@ using Newtonsoft.Json.Linq;
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using System.Runtime.Serialization;
+using System.Text.RegularExpressions;
 
 public class OpenAIApi : IMessageProvider, IChatObserver
 {
     private readonly HttpClient httpClient = new HttpClient();
-
-    private readonly string chatCompletionPrompt;
-    private readonly string toolCallPrompt;
     private IConfiguration? config;
     private ConcurrentQueue<Message> messageQueue = new();
     private Task<OpenAIApiResponse>? completeChatTask;
@@ -19,55 +17,63 @@ public class OpenAIApi : IMessageProvider, IChatObserver
     private Func<List<Tool>> toolsDelegate;
     private Func<List<Message>> messagesDelegate;
     private Func<GptModel> gptModelSettingDelegate;
+    private Func<InteractionMode> interactionModeDelegate;
 
-    public OpenAIApi(Func<List<Tool>> toolsDel, Func<List<Message>> messagesDel, Func<GptModel> gptModelSettingDel)
+    public OpenAIApi(
+        Func<List<Tool>> toolsDel,
+        Func<List<Message>> messagesDel,
+        Func<GptModel> gptModelSettingDel,
+        Func<InteractionMode> interactionModeDel)
     {
         toolsDelegate = toolsDel;
         messagesDelegate = messagesDel;
         gptModelSettingDelegate = gptModelSettingDel;
+        interactionModeDelegate = interactionModeDel;
         config = new ConfigurationBuilder()
             .AddUserSecrets<Program>()
             .Build();
 
         httpClient.Timeout = TimeSpan.FromSeconds(15);
+    }
 
-        toolCallPrompt = "\n\n## [[ASSISTANT_NAME]]s instructions for speaking\n\n";
-        toolCallPrompt += "\nYour message will cause the text content to be read aloud via text-to-speech over the laptop speakers so that The Client can hear you.";
-        toolCallPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
-        toolCallPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
-        toolCallPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
-        toolCallPrompt += "\nSince you can only read the transcription, you can only use intuition to figure out who is speaking. Feel free to ask for clarification, but only when necessary, as this is an interruption.";
-        toolCallPrompt += "\nWhen speaking, be straightforward, not overly nice.";
-        toolCallPrompt += "\nDo not bother to tell us that you are available to help because we already know you're here.";
+    public Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
+    {
+        var newMessages = messageQueue.ToArray(); // Garbage
+        messageQueue.Clear();
+        return Task.FromResult(newMessages.AsEnumerable());
+    }
 
-        toolCallPrompt += "## [[ASSISTANT_NAME]]s instructions for speaking\n\n";
-        toolCallPrompt += "\nYour speaking style sounds like it was meant to be heard, not read.";
-        toolCallPrompt += "\nIf you must compose, add your text to your message content. This will cause the text content to be read (via text-to-speech) over the laptop speakers so that The Client can hear you.";
-        toolCallPrompt += "\nYou do not address people before they address you, unless you are speaking for some other approved reason.";
-        toolCallPrompt += "\nYou proactively reminds Clients of tasks due soon without being prompted.";
-        toolCallPrompt += "\nYou do not discuss tasks that are not due soon unless The Client directly inquires about one.";
-        toolCallPrompt += "\nYou speak a response when someone addresses you as [[ASSISTANT_NAME]], but you are brief.";
-        toolCallPrompt += "\nWhen you speak, it will feel delayed to us due to network latency.";
-        toolCallPrompt += "\nWhen you speak, your text is spoken slowly and somewhat robotically, so keep your spoken text brief.";
-        toolCallPrompt += "\nIf someone thanks you, do not respond.";
-        toolCallPrompt += "\nThe Client does not want to hear from you too often or it will feel intrusive.";
-        toolCallPrompt += "\nSince you can only read the transcription, you can only use intuition to figure out who is speaking. Feel free to ask for clarification, but only when necessary, as this is an interruption.";
-        toolCallPrompt += "\nIf someone asks you a question, such as \"Hey [[ASSISTANT_NAME]], what are our current action items?\", then you may speak a response.";
-        toolCallPrompt += "\nWhen speaking, be straightforward, not overly nice. You do not bother with passive comments like \"If you need anything, just let me know.\" or \"Is there anything else I can help you with?\"";
+    public void OnNewMessages(IEnumerable<Message> messages)
+    {
+        messages = messages.Where(m => m.Role != Role.Assistant);
+        if (messages.Count() == 0)
+            return;
+
+        var wakeWordMode = interactionModeDelegate.Invoke() == InteractionMode.Passive;
+        var followUp = messages.Any((Message m) => m.Role == Role.Tool && m.FollowUp);
+        if (!wakeWordMode || WakeWordSpokenInMessages(messages) || followUp)
+        {
+            if (completeChatCts != null && completeChatCts.IsCancellationRequested == false)
+            {
+                completeChatCts.Cancel();
+            }
+            completeChatCts = new CancellationTokenSource();
+            try
+            {
+                completeChatTask = CompleteChatAsync(messagesDelegate.Invoke(), completeChatCts.Token, null, toolsDelegate.Invoke());
+            }
+            catch (TaskCanceledException)
+            {
+                Console.WriteLine("[Debug] API request cancelled");
+            }
+            completeChatTask.ContinueWith(HandleChatCompletion);
+        }
+
     }
 
     private async Task<OpenAIApiResponse> CompleteChatAsync(List<Message> messages, CancellationToken cancelToken, ResponseFormat? responseFormat = null, List<Tool>? tools = null)
     {
         var allowTools = tools != null && tools.Count > 0;
-
-        if (allowTools)
-        {
-            messages[0].Content += toolCallPrompt;
-        }
-        else
-        {
-            messages[0].Content += toolCallPrompt; // Identical either way for now
-        }
 
         var next = new ChatCompletionRequest
         {
@@ -117,38 +123,17 @@ public class OpenAIApi : IMessageProvider, IChatObserver
         }
     }
 
-    private string GptModelToStringId(GptModel gptModel)
+    private bool WakeWordSpokenInMessages(IEnumerable<Message> messages)
     {
-        return gptModel == GptModel.Gpt35 ? "gpt-3.5-turbo-1106" : "gpt-4-1106-preview";
-    }
-
-    public Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
-    {
-        var newMessages = messageQueue.ToArray(); // Garbage
-        messageQueue.Clear();
-        return Task.FromResult(newMessages.AsEnumerable());
-    }
-
-    public void OnNewMessages(IEnumerable<Message> messages)
-    {
-        messages = messages.Where(m => m.Role != Role.Assistant);
-        if (messages.Count() == 0)
-            return;
-
-        if (completeChatCts != null && completeChatCts.IsCancellationRequested == false)
+        string pattern = @"(?i:(?<![\'""])(potatoes)(?![\'""]))";
+        pattern = pattern.Replace("potatoes", JustStrings.ASSISTANT_NAME.ToLower());
+        messages = messages.Where(m => m.Role == Role.User);
+        foreach (var msg in messages)
         {
-            completeChatCts.Cancel();
+            bool messageContainsLiteral = string.IsNullOrEmpty(msg.Content) == false && Regex.IsMatch(msg.Content, pattern);
+            if (messageContainsLiteral) return true;
         }
-        completeChatCts = new CancellationTokenSource();
-        try
-        {
-            completeChatTask = CompleteChatAsync(messagesDelegate.Invoke(), completeChatCts.Token, null, toolsDelegate.Invoke());
-        }
-        catch (TaskCanceledException)
-        {
-            Console.WriteLine("[Debug] API request cancelled");
-        }
-        completeChatTask.ContinueWith(HandleChatCompletion);
+        return false;
     }
 
     private async Task HandleChatCompletion(Task<OpenAIApiResponse> completedTask)
@@ -200,7 +185,7 @@ public class OpenAIApi : IMessageProvider, IChatObserver
                     Console.WriteLine(ex.Message);
                     throw ex;
                 }
-                
+
             }
             else
             {
@@ -214,6 +199,11 @@ public class OpenAIApi : IMessageProvider, IChatObserver
             }
             messageQueue.Enqueue(toolMessage);
         }
+    }
+
+    private string GptModelToStringId(GptModel gptModel)
+    {
+        return gptModel == GptModel.Gpt35 ? "gpt-3.5-turbo-1106" : "gpt-4-1106-preview";
     }
 }
 

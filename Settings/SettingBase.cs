@@ -17,13 +17,14 @@ public abstract class SettingBase : ISetting
 
     public abstract Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts);
 
-    public Task<Message> CreateSettingStatusMessage(ToolCall tc, CancellationToken tkn)
+    public virtual Task<Message> CreateSettingStatusMessage(ToolCall tc, CancellationToken tkn)
     {
         var msg = new Message
         {
             Content = $"The Client Sound Device Setting value is {Value}",
             Role = Role.Tool,
-            ToolCallId = tc.Id
+            ToolCallId = tc.Id,
+            FollowUp = true
         };
         return Task.FromResult(msg);
     }
