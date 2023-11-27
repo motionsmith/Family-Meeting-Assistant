@@ -33,13 +33,13 @@ public class GptModelSetting : SettingBase
             }
         }
     };
-    public static SettingConfig SettingConfig { get; } = new SettingConfig("gpt-model-setting.csv", "1", typeof(GptModelSetting));
+    public static SettingConfig SettingConfig { get; } = new SettingConfig("gpt-model-setting.csv", "GPT-4", typeof(GptModelSetting));
 
     public override string SerializedValue
     {
         get
         {
-            return ((int)Value).ToString();
+            return (GptModel)Value == GptModel.Gpt35 ? "GPT-3.5" : "GPT-4";
         }
         
         set
@@ -52,7 +52,7 @@ public class GptModelSetting : SettingBase
 
     private bool sentIntroMessage;
 
-    public GptModelSetting(string defaultValue) : base(defaultValue)
+    public GptModelSetting(string startingValue) : base(startingValue)
     {
     }
 

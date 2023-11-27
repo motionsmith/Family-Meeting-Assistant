@@ -19,6 +19,10 @@ public abstract class Circumstance
     protected async Task<string> LoadPromptAsync(string fileName, CancellationToken cancelToken)
     {
         var prompt = await StringIO.LoadStateAsync(ErrorPrompt, fileName, cancelToken);
+        if (prompt == ErrorPrompt)
+        {
+            Console.WriteLine($"Failed to load prompt file {fileName}");
+        }
         prompt = InsertPromptVariables(prompt);
         return prompt;
     }

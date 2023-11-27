@@ -32,7 +32,7 @@ public class SettingsManager : IMessageProvider
         // Wrap the setting tools' execute methods
         instance.GetSettingTool.Execute = async (a, b) => 
         {
-            var msg = await instance.GetGetSettingMessageAsync(a, b);
+            var msg = await instance.CreateSettingStatusMessage(a, b);
             return msg;
         };
         instance.SetSettingTool.Execute = async (a, b) =>

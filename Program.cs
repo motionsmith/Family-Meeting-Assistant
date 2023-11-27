@@ -23,7 +23,6 @@ class Program
     private static SettingsManager? settingsManager;
     private static ConsoleChatObserver consoleChatObserver = new ConsoleChatObserver();
 
-    // TODO Add tool setting to change the gpt model
     // TODO Evaluate ways of reducing chat history length to ~30 messages. E.g. When 30 chats accumulate, use a GPT to summarize them into one message.
     // TODO Add a tool setting for Client name.
 

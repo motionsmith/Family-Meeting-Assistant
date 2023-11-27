@@ -47,5 +47,6 @@ public class SmithsonianDefaultCircumstance : Circumstance
         SaveString = await StringIO.LoadStateAsync(SaveString, SaveFileName, cancelToken);
         playerCoreDesc = await LoadPromptAsync("smithsonian-default-core.md", cancelToken);
         introPrompt = await LoadPromptAsync("smithsonian-default-intro.md", cancelToken);
+        defaultContextPrompt = await LoadPromptAsync("smithsonian-default-context.md", cancelToken);
     }
 }

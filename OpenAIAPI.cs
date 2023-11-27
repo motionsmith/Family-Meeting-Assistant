@@ -94,19 +94,27 @@ public class OpenAIApi : IMessageProvider, IChatObserver
         };
         //Console.WriteLine(requestJson);
 
-        var response = await httpClient.SendAsync(request, cancelToken);
-        if (response.IsSuccessStatusCode == false)
+        try
         {
-            var failureResponseContent = await response.Content.ReadAsStringAsync();
+            var response = await httpClient.SendAsync(request, cancelToken);
+            if (response.IsSuccessStatusCode == false)
+            {
+                var failureResponseContent = await response.Content.ReadAsStringAsync();
 
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"OPENAI ERROR - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
-            Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
-            Console.ResetColor();
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"OPENAI ERROR - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
+                Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
+                Console.ResetColor();
+            }
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
+            return responseContentObject;
         }
-        var responseContent = await response.Content.ReadAsStringAsync();
-        var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
-        return responseContentObject;
+        catch (TaskCanceledException ex)
+        {
+            Console.WriteLine($"[Debug] {ex.Message}");
+            throw;
+        }
     }
 
     private string GptModelToStringId(GptModel gptModel)
@@ -132,7 +140,14 @@ public class OpenAIApi : IMessageProvider, IChatObserver
             completeChatCts.Cancel();
         }
         completeChatCts = new CancellationTokenSource();
-        completeChatTask = CompleteChatAsync(messagesDelegate.Invoke(), completeChatCts.Token, null, toolsDelegate.Invoke());
+        try
+        {
+            completeChatTask = CompleteChatAsync(messagesDelegate.Invoke(), completeChatCts.Token, null, toolsDelegate.Invoke());
+        }
+        catch (TaskCanceledException)
+        {
+            Console.WriteLine("[Debug] API request cancelled");
+        }
         completeChatTask.ContinueWith(HandleChatCompletion);
     }
 

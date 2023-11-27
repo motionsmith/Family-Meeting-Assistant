@@ -10,14 +10,14 @@ public abstract class SettingBase : ISetting
 
     public abstract string SerializedValue { get; set; }
 
-    public SettingBase(string defaultValue)
+    public SettingBase(string startingValue)
     {
-        SerializedValue = defaultValue;
+        SerializedValue = startingValue;
     }
 
     public abstract Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts);
 
-    public Task<Message> GetGetSettingMessageAsync(ToolCall tc, CancellationToken tkn)
+    public Task<Message> CreateSettingStatusMessage(ToolCall tc, CancellationToken tkn)
     {
         var msg = new Message
         {

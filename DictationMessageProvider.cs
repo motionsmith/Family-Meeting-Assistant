@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
 
@@ -10,13 +11,14 @@ public class DictationMessageProvider : IMessageProvider
     private Task? cancelSynthTask;
 
     private ConcurrentQueue<Message> messageQueue = new ConcurrentQueue<Message>();
-    private CancellationTokenSource? interruptCts = null;
+    private bool isSynthesizing;
 
     public DictationMessageProvider(SpeechRecognizer speechRecognizer, SpeechSynthesizer speechSynthesizer)
     {
         this.speechRecognizer = speechRecognizer;
         this.speechSynthesizer = speechSynthesizer;
-
+        
+        speechSynthesizer.SynthesisStarted += OnSynthStarted;
         speechSynthesizer.SynthesisCanceled += OnSynthCancelled;
         speechSynthesizer.SynthesisCompleted += OnSynthCompleted;
         
@@ -24,7 +26,6 @@ public class DictationMessageProvider : IMessageProvider
         
         speechRecognizer.Recognized += (s, e) =>
         {
-            cancelSynthTask = null;
             if (e.Result.Reason == ResultReason.RecognizedSpeech)
             {
                 var recognitionMessage = new Message {
@@ -49,8 +50,6 @@ public class DictationMessageProvider : IMessageProvider
                 Console.WriteLine($"CANCELED: ErrorDetails={e.ErrorDetails}");
                 Console.WriteLine($"CANCELED: Did you set the speech resource key and region values?");
             }
-
-            
         };
 
         speechRecognizer.SessionStopped += (s, e) =>
@@ -59,8 +58,14 @@ public class DictationMessageProvider : IMessageProvider
         };
     }
 
+    private void OnSynthStarted(object? sender, SpeechSynthesisEventArgs e)
+    {
+       isSynthesizing = true;
+    }
+
     private void OnSynthCompleted(object? sender, SpeechSynthesisEventArgs e)
     {
+        isSynthesizing = false;
         cancelSynthTask = null;
     }
 
@@ -71,11 +76,9 @@ public class DictationMessageProvider : IMessageProvider
 
     private void CancelSynthesis(object? sender, SpeechRecognitionEventArgs e)
     {
-        if (cancelSynthTask == null)
+        if (isSynthesizing && cancelSynthTask == null)
         {
             cancelSynthTask = speechSynthesizer.StopSpeakingAsync();
-            Console.WriteLine($"Synth task cancellation started.");
-            interruptCts?.Cancel();
         }
     }
 
@@ -86,7 +89,6 @@ public class DictationMessageProvider : IMessageProvider
 
     public async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
     {
-        interruptCts = cts;
         var newMessages = messageQueue.ToArray(); // Garbage
         messageQueue.Clear();
         return newMessages;

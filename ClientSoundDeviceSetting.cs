@@ -67,7 +67,7 @@ public class ClientSoundDeviceSetting : SettingBase
         }
         if (TypedValue == SoundDeviceTypes.Headphones)
         {
-            content = $"\nYou are concerned whether they are still wearing headphones.";
+            content += $"\nYou are concerned whether they are still wearing headphones.";
         }
         var introMsg = new Message
         {

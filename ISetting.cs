@@ -6,7 +6,6 @@ public interface ISetting : IMessageProvider
     string SerializedValue { get; protected set; }
     Tool GetSettingTool {get;}
     Tool SetSettingTool {get;}
-
-    Task<Message> GetGetSettingMessageAsync(ToolCall tc, CancellationToken tkn);
+    Task<Message> CreateSettingStatusMessage(ToolCall tc, CancellationToken tkn);
     Task<Message> UpdateValueAsync(ToolCall tc, CancellationToken tkn);
 }
