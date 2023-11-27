@@ -29,7 +29,7 @@ public class ClientSoundDeviceSetting : SettingBase
                         }
                     }
                 },
-                Required = new List<string> { "title" }
+                Required = new List<string> { "value" }
             }
         }
     };

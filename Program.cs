@@ -54,9 +54,11 @@ class Program
 
         // Settings
         settingsManager = await SettingsManager.CreateInstance(new SettingConfig[] {
-            ClientSoundDeviceSetting.SettingConfig
+            ClientSoundDeviceSetting.SettingConfig,
+            GptModelSetting.SettingConfig
         }, new CancellationTokenSource().Token);
         var soundDeviceSettingGetter = settingsManager.GetterFor<ClientSoundDeviceSetting, SoundDeviceTypes>();
+        var gptModelSettingGetter = settingsManager.GetterFor<GptModelSetting, GptModel>();
 
         dictationMessageProvider = new DictationMessageProvider(speechRecognizer, speechSynthesizer);
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
@@ -89,6 +91,7 @@ class Program
                 speechManager
             },
             () => circumstanceManager.Tools,
+            gptModelSettingGetter,
             new CancellationTokenSource().Token);
 
         await ChoreManager.LoadAsync(new CancellationTokenSource().Token);

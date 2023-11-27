@@ -18,11 +18,13 @@ public class OpenAIApi : IMessageProvider, IChatObserver
     private CancellationTokenSource completeChatCts;
     private Func<List<Tool>> toolsDelegate;
     private Func<List<Message>> messagesDelegate;
+    private Func<GptModel> gptModelSettingDelegate;
 
-    public OpenAIApi(Func<List<Tool>> toolsDel, Func<List<Message>> messagesDel)
+    public OpenAIApi(Func<List<Tool>> toolsDel, Func<List<Message>> messagesDel, Func<GptModel> gptModelSettingDel)
     {
         toolsDelegate = toolsDel;
         messagesDelegate = messagesDel;
+        gptModelSettingDelegate = gptModelSettingDel;
         config = new ConfigurationBuilder()
             .AddUserSecrets<Program>()
             .Build();
@@ -69,7 +71,7 @@ public class OpenAIApi : IMessageProvider, IChatObserver
 
         var next = new ChatCompletionRequest
         {
-            Model = JustStrings.CHAT_MODEL,
+            Model = GptModelToStringId(gptModelSettingDelegate.Invoke()),
             Messages = messages.ToList(),
             Temperature = 0.7,
             Tools = tools,
@@ -105,6 +107,11 @@ public class OpenAIApi : IMessageProvider, IChatObserver
         var responseContent = await response.Content.ReadAsStringAsync();
         var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
         return responseContentObject;
+    }
+
+    private string GptModelToStringId(GptModel gptModel)
+    {
+        return gptModel == GptModel.Gpt35 ? "gpt-3.5-turbo-1106" : "gpt-4-1106-preview";
     }
 
     public Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
@@ -169,7 +176,16 @@ public class OpenAIApi : IMessageProvider, IChatObserver
             var tool = toolsDelegate.Invoke().FirstOrDefault(tool => tool.Function.Name == functionName);
             if (tool != null)
             {
-                toolMessage = await tool.Execute(call, toolCallsToken);
+                try
+                {
+                    toolMessage = await tool.Execute(call, toolCallsToken);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                    throw ex;
+                }
+                
             }
             else
             {

@@ -6,12 +6,12 @@ public class ChatManager
     private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(100);
     private static readonly string fileName = "message-history.json";
     
-    public static async Task<ChatManager> CreateAsync(IEnumerable<IChatObserver> observers, IEnumerable<IMessageProvider> messageProviders, Func<List<Tool>> toolsDel, CancellationToken cancelToken)
+    public static async Task<ChatManager> CreateAsync(IEnumerable<IChatObserver> observers, IEnumerable<IMessageProvider> messageProviders, Func<List<Tool>> toolsDel, Func<GptModel> chatModelDel, CancellationToken cancelToken)
     {
         var defaultValue = JsonConvert.SerializeObject(new MessageHistory());
         var fileContents = await StringIO.LoadStateAsync(defaultValue, fileName, cancelToken);
         var loadedMessages = JsonConvert.DeserializeObject<MessageHistory>(fileContents);
-        var instance = new ChatManager(loadedMessages.Messages, observers, messageProviders, toolsDel);
+        var instance = new ChatManager(loadedMessages.Messages, observers, messageProviders, toolsDel, chatModelDel);
         return instance;
     }
 
@@ -41,9 +41,13 @@ public class ChatManager
     private readonly OpenAIApi openAi;
     private CancellationTokenSource saveCts;
 
-    private ChatManager(IEnumerable<Message> initialMessages, IEnumerable<IChatObserver> observers, IEnumerable<IMessageProvider> messageProviders, Func<List<Tool>> toolsDel)
+    private ChatManager(IEnumerable<Message> initialMessages, IEnumerable<IChatObserver> observers, IEnumerable<IMessageProvider> messageProviders, Func<List<Tool>> toolsDel, Func<GptModel> gptModelDel)
     {
-        openAi = new OpenAIApi(toolsDel, () => Messages);
+        openAi = new OpenAIApi(
+            toolsDel,
+            () => Messages,
+            gptModelDel
+            );
         Messages = new List<Message>(initialMessages);
         this.observers = new List<IChatObserver>(observers)
         {
