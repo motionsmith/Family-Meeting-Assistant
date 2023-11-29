@@ -36,7 +36,7 @@ public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatComplet
         httpClient.Timeout = TimeSpan.FromSeconds(15);
     }
 
-    public async void RequestChatCompletion()
+    public void RequestChatCompletion()
     {
         if (completeChatCts != null && completeChatCts.IsCancellationRequested == false)
         {
@@ -88,10 +88,9 @@ public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatComplet
             System.Text.Encoding.UTF8,
             "application/json");
 
-        bool retryRequest = false;
+        int retries = 0;
         do
         {
-
             try
             {
                 var request = new HttpRequestMessage(HttpMethod.Post, JustStrings.CHAT_COMPLETION_ENDPOINT)
@@ -120,11 +119,11 @@ public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatComplet
             }
             catch (TaskCanceledException ex)
             {
-                retryRequest = true;
+                retries++;
                 Console.WriteLine(ex.Message);
             }
-        } while (retryRequest);
-        throw new NotImplementedException("How did you get here?");
+        } while (retries <= 2);
+        throw new TimeoutException("Tried API request 3 times--cancelling to avoid indefinite loop.");
     }
 
     private bool WakeWordSpokenInMessages(IEnumerable<Message> messages)
@@ -142,26 +141,40 @@ public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatComplet
 
     private async Task HandleChatCompletion(Task<OpenAIApiResponse> completedTask)
     {
+        // Sometimes we need to change the completed message.
+        Message message;
         if (completedTask.Exception != null)
         {
-            // Do something when request throws exception?
-            Console.WriteLine($"[Debug] Unhandled exception: {completedTask.Exception.Message}");
-            return;
-        }
-        Message message;
-        if (completedTask.Result.Error != null)
-        {
-            message = new Message
+            if (completedTask.Exception.InnerException is TimeoutException)
             {
-                Role = Role.Assistant,
-                Content = $"Error from OpenAI API! {completedTask.Result.Error.Message}"
-            };
+                message = new Message
+                {
+                    Role = Role.Assistant,
+                    Content = $"My server isn't responding. Check out your internet connection."
+                };
+            }
+            else
+            {
+                Console.WriteLine($"[Debug] Unhandled exception: {completedTask.Exception.Message}");
+                return;
+            }
+            // Do something when request throws exception?
         }
         else
         {
-            message = completedTask.Result.Choices[0].Message;
+            if (completedTask.Result.Error != null)
+            {
+                message = new Message
+                {
+                    Role = Role.Assistant,
+                    Content = $"Error from OpenAI API! {completedTask.Result.Error.Message}"
+                };
+            }
+            else
+            {
+                message = completedTask.Result.Choices[0].Message;
+            }
         }
-
         messageQueue.Enqueue(message);
 
         // Handle tool calling
