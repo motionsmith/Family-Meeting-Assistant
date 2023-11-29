@@ -20,6 +20,8 @@ public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatComplet
     private Func<GptModel> gptModelSettingDelegate;
     private Func<InteractionMode> interactionModeDelegate;
 
+    public bool IsCompletionTaskRunning => completeChatTask != null && completeChatTask.IsCompleted == false;
+
     public OpenAiChatCompleter(
         Func<List<Tool>> toolsDel,
         Func<List<Message>> messagesDel,
@@ -61,7 +63,7 @@ public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatComplet
             return;
 
         var wakeWordMode = interactionModeDelegate.Invoke() == InteractionMode.Passive;
-        var followUp = messages.Any((Message m) => m.Role == Role.Tool && m.FollowUp);
+        var followUp = messages.Any((Message m) => m.FollowUp);
         if (!wakeWordMode || WakeWordSpokenInMessages(messages) || followUp)
         {
             RequestChatCompletion();

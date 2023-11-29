@@ -21,7 +21,7 @@ public abstract class SettingBase : ISetting
     {
         var msg = new Message
         {
-            Content = $"The Client Sound Device Setting value is {Value}",
+            Content = $"The Setting \"{GetType().Name}\" value is {Value}",
             Role = Role.Tool,
             ToolCallId = tc.Id,
             FollowUp = true

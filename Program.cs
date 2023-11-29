@@ -24,7 +24,7 @@ class Program
     private static AudioConfig? audioConfig;
     private static SpeechManager? speechManager;
     private static SpeechRecognizer? speechRecognizer;
-    private static DictationMessageProvider? dictationMessageProvider;
+    private static CloudTranscriptionService? transcriptionService;
     private static CircumstanceManager? circumstanceManager;
     private static ChatManager? chatManager;
     private static OpenAiChatCompleter? chatCompleter;
@@ -47,27 +47,37 @@ class Program
             ClientSoundDeviceSetting.SettingConfig,
             GptModelSetting.SettingConfig,
             InteractionModeSetting.SettingConfig,
+            TranscribeSetting.SettingConfig
         }, new CancellationTokenSource().Token);
         var soundDeviceSettingGetter = settingsManager.GetterFor<ClientSoundDeviceSetting, SoundDeviceTypes>();
         var gptModelSettingGetter = settingsManager.GetterFor<GptModelSetting, GptModel>();
         var interactionModeSettingGetter = settingsManager.GetterFor<InteractionModeSetting, InteractionMode>();
+        var transcribeSettingGetter = settingsManager.GetterFor<TranscribeSetting, bool>();
 
-        // Speech
+        // MS Speech Service Config
         speechConfig = SpeechConfig.FromSubscription(config["SPEECH_KEY"], config["SPEECH_REGION"]);
         speechConfig.SpeechSynthesisVoiceName = JustStrings.VOICE_NAME;
         speechConfig.SpeechRecognitionLanguage = "en-US";
         audioConfig = AudioConfig.FromDefaultMicrophoneInput();
-        speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
-        speechSynthesizer = new SpeechSynthesizer(speechConfig);
-        speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, soundDeviceSettingGetter);
 
-        // Dictation
-        dictationMessageProvider = new DictationMessageProvider(speechRecognizer, speechManager);
+        // Transcription
+        speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
+        transcriptionService = new CloudTranscriptionService(speechRecognizer);
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
         {
-            await dictationMessageProvider.StopContinuousRecognitionAsync();
+            await transcriptionService.StopTranscriptionAsync(false);
         };
-        _ = dictationMessageProvider.StartContinuousRecognitionAsync();
+
+        // Speech
+        speechSynthesizer = new SpeechSynthesizer(speechConfig);
+        speechManager = new SpeechManager(transcriptionService, speechSynthesizer, settingsManager);
+        speechRecognizer.Recognizing += (s, e) =>
+        {
+            if (speechManager.IsSynthesizing)
+            {
+                speechManager.InterruptSynthesis();
+            }
+        };
 
         // Circumstances (prompt state)
         circumstanceManager = await CircumstanceManager.CreateAsync(new Circumstance[] {
@@ -95,7 +105,7 @@ class Program
                 chatCompleter
             },
             new IMessageProvider[] {
-                dictationMessageProvider,
+                transcriptionService,
                 weatherMessageProvider,
                 timeMessageProvider,
                 settingsManager,
@@ -106,7 +116,7 @@ class Program
             new CancellationTokenSource().Token);
 
         // User Commands
-        UserCommands.Spacebar += () =>
+        UserCommands.Interrupt += () =>
         {
             if (speechManager.IsSynthesizing)
             {
@@ -114,15 +124,33 @@ class Program
             }
             else
             {
-                Console.WriteLine($"RequestChatCompletion");
-                chatCompleter.RequestChatCompletion();
+                Console.WriteLine($"[Debug] The Client interrupts while the assistant is silent.");
+            }
+        };
+        UserCommands.RequestChatCompletion += () =>
+        {
+            if (chatCompleter.IsCompletionTaskRunning || speechManager.IsSynthesizing)
+                return;
+            chatCompleter.RequestChatCompletion();
+        };
+        UserCommands.ToggleTranscription += () =>
+        {
+            if (transcribeSettingGetter.Invoke())
+            {
+                transcriptionService.StopTranscriptionAsync(true);
+            }
+            else
+            {
+                transcriptionService.StartTranscriptionAsync(true);
             }
         };
 
         Console.WriteLine("Speak into your microphone.");
+        transcriptionService.StartTranscriptionAsync(false);
+
         var longTasks = new List<Task> {
-            chatManager.StartContinuousUpdatesAsync()/*,
-            UserCommands.StartReadingAsync()*/
+            chatManager.StartContinuousUpdatesAsync(),
+            UserCommands.StartReadingAsync()
         };
 
         var allLongTasks = Task.WhenAny(longTasks);

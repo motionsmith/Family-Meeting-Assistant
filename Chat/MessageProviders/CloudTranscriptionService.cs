@@ -1,21 +1,17 @@
 ﻿using System.Collections.Concurrent;
-using System.Diagnostics;
 using Microsoft.CognitiveServices.Speech;
-using Microsoft.CognitiveServices.Speech.Audio;
 
-public class DictationMessageProvider : IMessageProvider
+public class CloudTranscriptionService : IMessageProvider, ITranscriptionService
 {
     private SpeechRecognizer speechRecognizer;
-    private SpeechManager speechManager;
 
     private ConcurrentQueue<Message> messageQueue = new ConcurrentQueue<Message>();
 
-    public DictationMessageProvider(SpeechRecognizer speechRecognizer, SpeechManager speechManager)
+    public bool IsTranscribing { get; private set; }
+
+    public CloudTranscriptionService(SpeechRecognizer speechRecognizer)
     {
         this.speechRecognizer = speechRecognizer;
-        this.speechManager = speechManager;
-        
-        speechRecognizer.Recognizing += CancelSynthesis;
         
         speechRecognizer.Recognized += (s, e) =>
         {
@@ -45,23 +41,42 @@ public class DictationMessageProvider : IMessageProvider
             }
         };
 
+        speechRecognizer.SessionStarted += (s, e) =>
+        {
+            IsTranscribing = true;
+        };
+
         speechRecognizer.SessionStopped += (s, e) =>
         {
-            
+            IsTranscribing = false;
         };
     }
 
-    private void CancelSynthesis(object? sender, SpeechRecognitionEventArgs e)
+    public async Task StartTranscriptionAsync(bool addSystemMessage)
     {
-        if (speechManager.IsSynthesizing)
+        await speechRecognizer.StartContinuousRecognitionAsync();
+        if (addSystemMessage)
         {
-            speechManager.InterruptSynthesis();
+            messageQueue.Enqueue(new Message{
+                Role = Role.System,
+                Content = "You activate transcription.",
+                FollowUp = true
+            });
         }
     }
 
-    public async Task StopContinuousRecognitionAsync()
+    public async Task StopTranscriptionAsync(bool addSystemMessage)
     {
         await speechRecognizer.StopContinuousRecognitionAsync();
+        if (addSystemMessage)
+        {
+            messageQueue.Enqueue(new Message{
+                Role = Role.System,
+                Content = "You deactivate transcription.",
+                FollowUp = true
+            });
+        }
+
     }
 
     public async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
@@ -69,10 +84,5 @@ public class DictationMessageProvider : IMessageProvider
         var newMessages = messageQueue.ToArray(); // Garbage
         messageQueue.Clear();
         return newMessages;
-    }
-
-    internal async Task StartContinuousRecognitionAsync()
-    {
-        await speechRecognizer.StartContinuousRecognitionAsync();
     }
 }

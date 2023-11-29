@@ -1,9 +1,7 @@
 
 public class SettingsManager : IMessageProvider
 {
-    private readonly Dictionary<Type, SettingConfig> settingConfigs;
     private readonly List<ISetting> settings;
-    private readonly IEnumerable<Tool> settingsTools;
 
     public IEnumerable<Tool> SettingsTools => settings.SelectMany(s => new Tool[] { s.GetSettingTool, s.SetSettingTool});
 
@@ -18,16 +16,24 @@ public class SettingsManager : IMessageProvider
     private SettingsManager(IEnumerable<SettingConfig> settingConfigs, IEnumerable<ISetting> settings)
     {
         var settingsConfigsByType = settingConfigs.Select(cfg => new KeyValuePair<Type, SettingConfig>(cfg.settingType, cfg));
-        this.settingConfigs = new Dictionary<Type, SettingConfig> (settingsConfigsByType);
         this.settings = new List<ISetting>(settings);
     }
 
     private static async Task<ISetting> CreateSettingObject(SettingConfig config, CancellationToken cancelToken)
     {
-        // Load file contents using fileName
-        var fileContents = await StringIO.LoadStateAsync(config.defaultValue, config.fileName, cancelToken);
-        // Create an instance of a Setting with the loaded setting value
-        var instance = (ISetting)Activator.CreateInstance(config.settingType, fileContents);
+        ISetting? instance;
+        if (string.IsNullOrEmpty(config.fileName))
+        {
+            //if (config.settingType == typeof(bool))
+            instance = (ISetting)Activator.CreateInstance(config.settingType);
+        }
+        else
+        {
+            // Load file contents using fileName
+            var fileContents = await StringIO.LoadStateAsync(config.defaultValue, config.fileName, cancelToken);
+            // Create an instance of a Setting with the loaded setting value
+            instance = (ISetting)Activator.CreateInstance(config.settingType, fileContents);
+        }
 
         // Wrap the setting tools' execute methods
         instance.GetSettingTool.Execute = async (a, b) => 
@@ -46,6 +52,7 @@ public class SettingsManager : IMessageProvider
 
     private static async Task SaveStateAsync(SettingConfig config, ISetting setting, CancellationToken cancelToken)
     {
+        if (string.IsNullOrEmpty(config.fileName)) return; // no need to save this setting.
         await StringIO.SaveStateAsync(setting.SerializedValue, config.fileName, cancelToken);
     }
 
@@ -75,9 +82,3 @@ public class SettingConfig
         settingType = type;
     }
 }
-
-
-//// Usage
-//TManager manager = new TManager();
-//manager.Register<MyClass>("myClassData.txt");
-//MyClass instance = manager.CreateInstance<MyClass>();

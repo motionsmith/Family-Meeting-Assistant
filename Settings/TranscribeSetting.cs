@@ -1,11 +1,11 @@
-public class InteractionModeSetting : SettingBase
+public class TranscribeSetting : SettingBase
 {
     public override Tool GetSettingTool { get; } = new Tool
     {
         Function = new ToolFunction
         {
-            Name = "get_interaction_mode",
-            Description = "Gets the current interaction mode for the Assistant: Active or Passive"
+            Name = "is_transcribe_active",
+            Description = "True when The Client's transcription service is transcribing their speech. False when transcription service is not running. When false, The Client is muted."
         }
     };
 
@@ -13,17 +13,16 @@ public class InteractionModeSetting : SettingBase
     {
         Function = new ToolFunction
         {
-            Name = "set_interaction_mode",
-            Description = "Sets the current interaction mode for the Assistant: Active or Passive",
+            Name = "set_transcribe_active",
+            Description = "Activates or deactivates The Client's transcription service. When not active, The Client is essentially muted.",
             Parameters = new ToolFunctionParameters
             {
                 Properties = new Dictionary<string, ToolFunctionParameterProperty> {
                     {
                         "value", new ToolFunctionParameterProperty
                         {
-                            Type = "string",
-                            Enum = new List<string>{ "Active", "Passive" },
-                            Description = "The interaction mode for the Assistant. Determines when (in the app logic) GPT chat completions are requested."
+                            Type = "boolean",
+                            Description = "True when The Client's transcription is active. The user is muted when false."
                         }
                     }
                 },
@@ -31,26 +30,26 @@ public class InteractionModeSetting : SettingBase
             }
         }
     };
-    public static SettingConfig SettingConfig { get; } = new SettingConfig("interaction-mode-setting.csv", InteractionMode.Active.ToString(), typeof(InteractionModeSetting));
+    public static SettingConfig SettingConfig { get; } = new SettingConfig(null, null, typeof(TranscribeSetting));
 
     public override string SerializedValue
     {
         get
         {
-            return Value.ToString();
+            return ((bool)Value).ToString();
         }
         
         set
         {
-            Value = (InteractionMode)Enum.Parse(typeof(InteractionMode), value);
+            Value = bool.Parse(value);
         }
     }
 
-    private InteractionMode TypedValue => (InteractionMode)Value;
+    private bool TypedValue => (bool)Value;
 
     private bool sentIntroMessage;
 
-    public InteractionModeSetting(string startingValue) : base(startingValue)
+    public TranscribeSetting() : base(true.ToString())
     {
     }
 
@@ -58,7 +57,7 @@ public class InteractionModeSetting : SettingBase
     {
         if (sentIntroMessage) return Task.FromResult(new Message[] { }.AsEnumerable());
 
-        var content = $"The Interaction Mode setting is {TypedValue}";
+        var content = $"Transcription is{(Value == false ? " not" : string.Empty)} running.";
         var introMsg = new Message
         {
             Role = Role.System,
@@ -67,10 +66,4 @@ public class InteractionModeSetting : SettingBase
         sentIntroMessage = true;
         return Task.FromResult(new Message[] { introMsg }.AsEnumerable());
     }
-}
-
-public enum InteractionMode
-{
-    Active,
-    Passive
 }

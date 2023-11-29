@@ -5,21 +5,23 @@ using Microsoft.CognitiveServices.Speech;
 public class SpeechManager : IMessageProvider, IChatObserver
 {
     public bool IsSynthesizing {get; private set; }
-    private SpeechRecognizer speechRecognizer;
+    private ITranscriptionService transcriptionService;
     private SpeechSynthesizer speechSynthesizer;
     private Func<SoundDeviceTypes> soundDeviceGetter;
+    private Func<bool> transcribeSettingGetter;
 
     private bool wasInterrupted = false;
     private ConcurrentQueue<Message> newMessageQueue = new ConcurrentQueue<Message>();
 
-    public SpeechManager(SpeechRecognizer speechRecognizer, SpeechSynthesizer speechSynthesizer, Func<SoundDeviceTypes> soundDeviceGetter)
+    public SpeechManager(ITranscriptionService transcriptionSvc, SpeechSynthesizer speechSynthesizer, SettingsManager settingsManager)
     {
-        this.speechRecognizer = speechRecognizer;
+        this.transcriptionService = transcriptionSvc;
         this.speechSynthesizer = speechSynthesizer;
         this.speechSynthesizer.SynthesisStarted += HandleSynthesisStarted;
         this.speechSynthesizer.Synthesizing += HandleSynthesizing;
         this.speechSynthesizer.SynthesisCompleted += HandleSynthesisCompleted;
-        this.soundDeviceGetter = soundDeviceGetter;
+        this.soundDeviceGetter = settingsManager.GetterFor<ClientSoundDeviceSetting, SoundDeviceTypes>();
+        this.transcribeSettingGetter = settingsManager.GetterFor<TranscribeSetting, bool>();
     }
 
     public Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
@@ -52,14 +54,16 @@ public class SpeechManager : IMessageProvider, IChatObserver
     {
         var soundDevice = soundDeviceGetter.Invoke();
         if (soundDevice == SoundDeviceTypes.OpenAirSpeakers)
-            await speechRecognizer.StopContinuousRecognitionAsync();
-        
-        var result = await speechSynthesizer.SpeakTextAsync(message.Content);
-        CheckForInterruption(message);
-        // DEBUG 
-        if (result.Reason == ResultReason.Canceled)
         {
-            var cancellation = SpeechSynthesisCancellationDetails.FromResult(result);
+            await transcriptionService.StopTranscriptionAsync(false);
+        }
+        var synthesisResult = await speechSynthesizer.SpeakTextAsync(message.Content);
+        CheckIfInterrupted(message);
+
+        // DEBUG 
+        if (synthesisResult.Reason == ResultReason.Canceled)
+        {
+            var cancellation = SpeechSynthesisCancellationDetails.FromResult(synthesisResult);
             if (cancellation.Reason == CancellationReason.Error)
             {
                 Console.WriteLine($"CANCELED: ErrorCode={cancellation.ErrorCode}");
@@ -67,12 +71,15 @@ public class SpeechManager : IMessageProvider, IChatObserver
                 Console.WriteLine($"CANCELED: Did you set the speech resource key and region values?");
             }
         }
-        if (soundDevice == SoundDeviceTypes.OpenAirSpeakers)
-            await speechRecognizer.StartContinuousRecognitionAsync();
-        return result;
+        
+        if (soundDevice == SoundDeviceTypes.OpenAirSpeakers && transcribeSettingGetter.Invoke())
+        {
+            await transcriptionService.StartTranscriptionAsync(false);
+        }
+        return synthesisResult;
     }
 
-    private void CheckForInterruption(Message message)
+    private void CheckIfInterrupted(Message message)
     {
         var interrupted = wasInterrupted;
         wasInterrupted = false;

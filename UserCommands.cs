@@ -1,11 +1,11 @@
 using System.Diagnostics;
-using Microsoft.CognitiveServices.Speech;
-
 public static class UserCommands
 {
     private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(100);
 
-    public static event Action? Spacebar;
+    public static event Action? Interrupt;
+    public static event Action? RequestChatCompletion;
+    public static event Action? ToggleTranscription;
 
     public static Task StartReadingAsync()
     {
@@ -17,7 +17,15 @@ public static class UserCommands
                 var key = Console.ReadKey(intercept: true); // 'intercept: true' prevents the key from being displayed
                 if (key.Key == ConsoleKey.Spacebar)
                 {
-                    Spacebar?.Invoke();
+                    ToggleTranscription?.Invoke();
+                }
+                else if (key.Key == ConsoleKey.Enter)
+                {
+                    RequestChatCompletion?.Invoke();
+                }
+                else if (key.Key == ConsoleKey.Escape)
+                {
+                    Interrupt?.Invoke();
                 }
 
                 stopwatch.Stop();
