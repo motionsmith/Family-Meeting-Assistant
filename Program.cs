@@ -1,9 +1,9 @@
-﻿// TODO Mute User Mode – The Client can ask to be muted. Assistant mutes The Client, then Assistant does not listen or respond until it is reactivated when The Client says "unmute".
-// TODO Add Users service
-// TODO Add Contacts service
-// TODO Add Calendar service
-// TODO Add Hue lights service
+﻿// TODO Add wake word to be used when transcription is off.
 // Explore switching to Maui (no current solution for sound effects in console app)
+// TODO Add Users service (JSON)
+// TODO Add Contacts service (JSON)
+// TODO Add Calendar service (Ical.Net)
+// TODO Add Hue lights service
 
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
