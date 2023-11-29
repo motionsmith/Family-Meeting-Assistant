@@ -11,28 +11,37 @@ public static class UserCommands
     {
         return Task.Run(async () =>
         {
-            while (true)
+            try
             {
-                Stopwatch stopwatch = Stopwatch.StartNew();
-                var key = Console.ReadKey(intercept: true); // 'intercept: true' prevents the key from being displayed
-                if (key.Key == ConsoleKey.Spacebar)
-                {
-                    ToggleTranscription?.Invoke();
-                }
-                else if (key.Key == ConsoleKey.Enter)
-                {
-                    RequestChatCompletion?.Invoke();
-                }
-                else if (key.Key == ConsoleKey.Escape)
-                {
-                    Interrupt?.Invoke();
-                }
 
-                stopwatch.Stop();
-                if (stopwatch.Elapsed < loopMinDuration)
+                while (true)
                 {
-                    await Task.Delay(loopMinDuration - stopwatch.Elapsed);
+                    Stopwatch stopwatch = Stopwatch.StartNew();
+                    var key = Console.ReadKey(intercept: true); // 'intercept: true' prevents the key from being displayed
+                    if (key.Key == ConsoleKey.Spacebar)
+                    {
+                        ToggleTranscription?.Invoke();
+                    }
+                    else if (key.Key == ConsoleKey.Enter)
+                    {
+                        RequestChatCompletion?.Invoke();
+                    }
+                    else if (key.Key == ConsoleKey.Escape)
+                    {
+                        Interrupt?.Invoke();
+                    }
+
+                    stopwatch.Stop();
+                    if (stopwatch.Elapsed < loopMinDuration)
+                    {
+                        await Task.Delay(loopMinDuration - stopwatch.Elapsed);
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                throw;
             }
         });
     }

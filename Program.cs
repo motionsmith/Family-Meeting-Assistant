@@ -62,7 +62,7 @@ class Program
 
         // Transcription
         speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
-        transcriptionService = new CloudTranscriptionService(speechRecognizer);
+        transcriptionService = new CloudTranscriptionService(speechRecognizer, settingsManager);
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
         {
             await transcriptionService.StopTranscriptionAsync(false);
@@ -135,7 +135,10 @@ class Program
         };
         UserCommands.ToggleTranscription += () =>
         {
-            if (transcribeSettingGetter.Invoke())
+            bool transcribeSetting = transcribeSettingGetter.Invoke();
+
+            Console.WriteLine($"[Debug] Toggling transcription to {!transcribeSetting}");
+            if (transcribeSetting)
             {
                 transcriptionService.StopTranscriptionAsync(true);
             }

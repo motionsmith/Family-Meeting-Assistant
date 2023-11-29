@@ -72,7 +72,8 @@ public class SpeechManager : IMessageProvider, IChatObserver
             }
         }
         
-        if (soundDevice == SoundDeviceTypes.OpenAirSpeakers && transcribeSettingGetter.Invoke())
+        bool transcribe = transcribeSettingGetter.Invoke();
+        if (soundDevice == SoundDeviceTypes.OpenAirSpeakers && transcribe)
         {
             await transcriptionService.StartTranscriptionAsync(false);
         }

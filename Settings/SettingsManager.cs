@@ -25,7 +25,7 @@ public class SettingsManager : IMessageProvider
         if (string.IsNullOrEmpty(config.fileName))
         {
             //if (config.settingType == typeof(bool))
-            instance = (ISetting)Activator.CreateInstance(config.settingType);
+            instance = (ISetting)Activator.CreateInstance(config.settingType, string.Empty);
         }
         else
         {
@@ -67,6 +67,12 @@ public class SettingsManager : IMessageProvider
     {
         var x = settings.OfType<T>().First();
         return () => (TValue)x.Value;
+    }
+
+    internal Action<TValue> SetterFor<T, TValue>() where T : ISetting
+    {
+        var x = settings.OfType<T>().First();
+        return (value) => x.Value = value;
     }
 }
 public class SettingConfig

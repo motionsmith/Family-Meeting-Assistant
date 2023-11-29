@@ -32,25 +32,13 @@ public class TranscribeSetting : SettingBase
     };
     public static SettingConfig SettingConfig { get; } = new SettingConfig(null, null, typeof(TranscribeSetting));
 
-    public override string SerializedValue
-    {
-        get
-        {
-            return ((bool)Value).ToString();
-        }
-        
-        set
-        {
-            Value = bool.Parse(value);
-        }
-    }
-
-    private bool TypedValue => (bool)Value;
+    public override string SerializedValue {get; set;} // Do not save this setting
 
     private bool sentIntroMessage;
 
-    public TranscribeSetting() : base(true.ToString())
+    public TranscribeSetting(string startingValue) : base(true.ToString())
     {
+        Value = true;
     }
 
     public override Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)

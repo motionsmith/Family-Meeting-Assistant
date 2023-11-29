@@ -9,17 +9,22 @@ public class CloudTranscriptionService : IMessageProvider, ITranscriptionService
 
     public bool IsTranscribing { get; private set; }
 
-    public CloudTranscriptionService(SpeechRecognizer speechRecognizer)
+    private Action<bool> transcribeSettingSetter;
+    private Func<bool> transcribeSettingGetter;
+    public CloudTranscriptionService(SpeechRecognizer speechRecognizer, SettingsManager settingsManager)
     {
         this.speechRecognizer = speechRecognizer;
-        
+        this.transcribeSettingSetter = settingsManager.SetterFor<TranscribeSetting, bool>();
+        this.transcribeSettingGetter = settingsManager.GetterFor<TranscribeSetting, bool>();
+
         speechRecognizer.Recognized += (s, e) =>
         {
             if (e.Result.Reason == ResultReason.RecognizedSpeech)
             {
-                var recognitionMessage = new Message {
-                     Content = e.Result.Text,
-                     Role = Role.User
+                var recognitionMessage = new Message
+                {
+                    Content = e.Result.Text,
+                    Role = Role.User
                 };
                 messageQueue.Enqueue(recognitionMessage);
             }
@@ -52,31 +57,36 @@ public class CloudTranscriptionService : IMessageProvider, ITranscriptionService
         };
     }
 
-    public async Task StartTranscriptionAsync(bool addSystemMessage)
+    public async Task StartTranscriptionAsync(bool updateUserPreference)
     {
         await speechRecognizer.StartContinuousRecognitionAsync();
-        if (addSystemMessage)
+
+        Console.WriteLine($"[Debug] Transcription service changed setting to {transcribeSettingGetter.Invoke()}");
+        if (updateUserPreference)
         {
-            messageQueue.Enqueue(new Message{
-                Role = Role.System,
-                Content = "You activate transcription.",
-                FollowUp = true
+            transcribeSettingSetter.Invoke(true);
+            messageQueue.Enqueue(new Message
+            {
+                Role = Role.Assistant,
+                Content = "Hello. I can hear you now."
             });
         }
     }
 
-    public async Task StopTranscriptionAsync(bool addSystemMessage)
+    public async Task StopTranscriptionAsync(bool updateUserPreference)
     {
         await speechRecognizer.StopContinuousRecognitionAsync();
-        if (addSystemMessage)
+
+        if (updateUserPreference)
         {
-            messageQueue.Enqueue(new Message{
-                Role = Role.System,
-                Content = "You deactivate transcription.",
-                FollowUp = true
+            transcribeSettingSetter.Invoke(false);
+            Console.WriteLine($"[Debug] Transcription service changed setting to {transcribeSettingGetter.Invoke()}");
+            messageQueue.Enqueue(new Message
+            {
+                Role = Role.Assistant,
+                Content = "I've stopped listening. You can say my name to wake me up."
             });
         }
-
     }
 
     public async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
