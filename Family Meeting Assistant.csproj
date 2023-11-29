@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -6,24 +6,20 @@
     <RootNamespace>Family_Meeting_Assistant</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <UserSecretsId>ba08f9c7-7e93-4a1a-8f2c-323fea353185</UserSecretsId>
   </PropertyGroup>
 
   <PropertyGroup>
     <StartAction>Project</StartAction>
     <ExternalConsole>true</ExternalConsole>
-    <EnvironmentVariables>
-      <Variable name="SPEECH_KEY" value="721f875bbebb42c1b21e7dc45a8c50fe" />
-      <Variable name="SPEECH_REGION" value="westus" />
-      <Variable name="OPENAI_KEY" value="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" />
-      <Variable name="OPENAI_ORG" value="org-HwwgpJdCV6qlH6ylUkvCsaIT" />
-      <Variable name="MODEL_ID" value="gpt-4-1106-preview" />
-      <Variable name="ASSISTANT_NAME" value="Walter" />
-export ASSISTANT_NAME=Walter"
-    </EnvironmentVariables>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.32.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <EmbeddedResource Include="Resources/ding_sound.wav" />
   </ItemGroup>
 
 </Project>
