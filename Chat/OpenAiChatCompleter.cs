@@ -36,7 +36,7 @@ public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatComplet
         httpClient.Timeout = TimeSpan.FromSeconds(15);
     }
 
-    public void RequestChatCompletion()
+    public async void RequestChatCompletion()
     {
         if (completeChatCts != null && completeChatCts.IsCancellationRequested == false)
         {
@@ -88,29 +88,43 @@ public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatComplet
             System.Text.Encoding.UTF8,
             "application/json");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, JustStrings.CHAT_COMPLETION_ENDPOINT)
+        bool retryRequest = false;
+        do
         {
-            Content = requestContent,
-            Headers = {
-                { "Authorization", $"Bearer {config["OPENAI_KEY"]}" },
-                { "OpenAI-Organization", config["OPENAI_ORG"] }
+
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Post, JustStrings.CHAT_COMPLETION_ENDPOINT)
+                {
+                    Content = requestContent,
+                    Headers = {
+                        { "Authorization", $"Bearer {config["OPENAI_KEY"]}" },
+                        { "OpenAI-Organization", config["OPENAI_ORG"] }
+                    }
+                };
+                //Console.WriteLine(requestJson);
+
+                var httpResponse = await httpClient.SendAsync(request, cancelToken);
+                if (httpResponse.IsSuccessStatusCode == false)
+                {
+                    var failureResponseContent = await httpResponse.Content.ReadAsStringAsync();
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"OPENAI ERROR - {httpResponse.StatusCode} {httpResponse.ReasonPhrase} {failureResponseContent}");
+                    Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
+                    Console.ResetColor();
+
+                }
+                var responseContent = await httpResponse.Content.ReadAsStringAsync();
+                var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
+                return responseContentObject;
             }
-        };
-        //Console.WriteLine(requestJson);
-
-        var response = await httpClient.SendAsync(request, cancelToken);
-        if (response.IsSuccessStatusCode == false)
-        {
-            var failureResponseContent = await response.Content.ReadAsStringAsync();
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"OPENAI ERROR - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
-            Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
-            Console.ResetColor();
-
-        }
-        var responseContent = await response.Content.ReadAsStringAsync();
-        var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
-        return responseContentObject;
+            catch (TaskCanceledException ex)
+            {
+                retryRequest = true;
+                Console.WriteLine(ex.Message);
+            }
+        } while (retryRequest);
+        throw new NotImplementedException("How did you get here?");
     }
 
     private bool WakeWordSpokenInMessages(IEnumerable<Message> messages)
@@ -139,8 +153,8 @@ public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatComplet
         {
             message = new Message
             {
-                Role = Role.System,
-                Content = $"Error from OpenAI API: {completedTask.Result.Error.Message}"
+                Role = Role.Assistant,
+                Content = $"Error from OpenAI API! {completedTask.Result.Error.Message}"
             };
         }
         else

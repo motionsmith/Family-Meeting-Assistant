@@ -1,6 +1,4 @@
-﻿// TODO OpenAIApi to retry during timeouts. Necessary in passive mode.
-// TODO Mute User Mode – The Client can ask to be muted. Assistant mutes The Client, then Assistant does not listen or respond until it is reactivated when The Client says "unmute".
-// TODO Evaluate ways of reducing chat history length to ~30 messages. E.g. When 30 chats accumulate, use a GPT to summarize them into one message.
+﻿// TODO Mute User Mode – The Client can ask to be muted. Assistant mutes The Client, then Assistant does not listen or respond until it is reactivated when The Client says "unmute".
 // TODO Add Users service
 // TODO Add Contacts service
 // TODO Add Calendar service
