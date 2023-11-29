@@ -1,18 +1,11 @@
-﻿    // TODO OpenAIApi to retry during timeouts. Necessary in passive mode.
-    // TODO Keyboard Button to manually trigger a chat completion request
-    // TODO Keyboard Button Start/Stop dictation listening
-    
-    // Three interaction modes
-    /*
-    1. **Active Mode** – The AI can listen and respond without needing a wake word. Can still be used passively by telling it how to behave.
-    2. **Mute AI Mode** – The AI listens passively and only responds when the wake word is used. This is like Active mode except the dictation message is not enough for the AI to respond. The message must also contain the wake word. Will be effective at reducing model API consts.
-    3. **Mute User Mode** – The AI does not listen or respond until it is reactivated, possibly through a different interface or command. This is how Google Home works
-    */
-    // TODO Write prompts for the AI to teach the user about these modes.
-
-    // TODO Make tasks completable by task index (or line number). This will be more reliable.
-    // TODO Evaluate ways of reducing chat history length to ~30 messages. E.g. When 30 chats accumulate, use a GPT to summarize them into one message.
-    // TODO Add a tool setting for Client name.
+﻿// TODO OpenAIApi to retry during timeouts. Necessary in passive mode.
+// TODO Mute User Mode – The Client can ask to be muted. Assistant mutes The Client, then Assistant does not listen or respond until it is reactivated when The Client says "unmute".
+// TODO Evaluate ways of reducing chat history length to ~30 messages. E.g. When 30 chats accumulate, use a GPT to summarize them into one message.
+// TODO Add Users service
+// TODO Add Contacts service
+// TODO Add Calendar service
+// TODO Add Hue lights service
+// Explore switching to Maui (no current solution for sound effects in console app)
 
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
@@ -26,6 +19,7 @@ class Program
     private static readonly TimeMessageProvider timeMessageProvider = new TimeMessageProvider();
     private static IConfiguration? config;
     private static WeatherMessageProvider? weatherMessageProvider;
+    private static ClientTaskManager? taskManager;
     private static SettingsManager? settingsManager;
     private static SpeechConfig? speechConfig;
     private static SpeechSynthesizer? speechSynthesizer;
@@ -35,6 +29,7 @@ class Program
     private static DictationMessageProvider? dictationMessageProvider;
     private static CircumstanceManager? circumstanceManager;
     private static ChatManager? chatManager;
+    private static OpenAiChatCompleter? chatCompleter;
 
     async static Task Main(string[] args)
     {
@@ -47,7 +42,7 @@ class Program
         weatherMessageProvider = new WeatherMessageProvider(config["OWM_KEY"], () => new(Lat, Long));
 
         // Task list
-        await ChoreManager.LoadAsync(new CancellationTokenSource().Token);
+        taskManager = await ClientTaskManager.CreateAsync(new CancellationTokenSource().Token);
 
         // Settings
         settingsManager = await SettingsManager.CreateInstance(new SettingConfig[] {
@@ -67,10 +62,9 @@ class Program
         speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
         speechSynthesizer = new SpeechSynthesizer(speechConfig);
         speechManager = new SpeechManager(speechRecognizer, speechSynthesizer, soundDeviceSettingGetter);
-        var _ = KeyboardSpeechInterrupter.StartKeyboardInterrupter(speechManager);
 
         // Dictation
-        dictationMessageProvider = new DictationMessageProvider(speechRecognizer, speechSynthesizer);
+        dictationMessageProvider = new DictationMessageProvider(speechRecognizer, speechManager);
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
         {
             await dictationMessageProvider.StopContinuousRecognitionAsync();
@@ -81,31 +75,70 @@ class Program
         circumstanceManager = await CircumstanceManager.CreateAsync(new Circumstance[] {
             new SmithsonianDefaultCircumstance(
                 weatherMessageProvider,
-                settingsManager)
+                settingsManager,
+                taskManager,
+                timeMessageProvider)
         },
         (msg) => { chatManager.PinnedMessage = msg; },
         new CancellationTokenSource().Token);
+
+        // Chat Completion
+        chatCompleter = new OpenAiChatCompleter(
+            toolsDel: () => circumstanceManager.Tools,
+            messagesDel: () => chatManager.Messages,
+            settingsManager);
 
         // Chat management
         chatManager = await ChatManager.CreateAsync(
             new List<IChatObserver>() {
                 speechManager,
                 consoleChatObserver,
-                circumstanceManager
+                circumstanceManager,
+                chatCompleter
             },
             new IMessageProvider[] {
                 dictationMessageProvider,
                 weatherMessageProvider,
                 timeMessageProvider,
                 settingsManager,
-                speechManager
+                speechManager,
+                taskManager,
+                chatCompleter
             },
-            toolsDel: () => circumstanceManager.Tools,
-            gptModelSettingGetter,
-            interactionModeSettingGetter,
             new CancellationTokenSource().Token);
-        
+
+        // User Commands
+        UserCommands.Spacebar += () =>
+        {
+            if (speechManager.IsSynthesizing)
+            {
+                speechManager.InterruptSynthesis();
+            }
+            else
+            {
+                Console.WriteLine($"RequestChatCompletion");
+                chatCompleter.RequestChatCompletion();
+            }
+        };
+
         Console.WriteLine("Speak into your microphone.");
-        await chatManager.StartContinuousUpdatesAsync();
+        var longTasks = new List<Task> {
+            chatManager.StartContinuousUpdatesAsync()/*,
+            UserCommands.StartReadingAsync()*/
+        };
+
+        var allLongTasks = Task.WhenAny(longTasks);
+        await allLongTasks;
+
+        Console.WriteLine("Goodbye");
+        await Task.Delay(5000);
+    }
+
+    private static void Test(Task<Task> task)
+    {
+        if (task.Exception != null)
+        {
+            Console.WriteLine($"[Debug] {task.Exception.Message}");
+        }
     }
 }

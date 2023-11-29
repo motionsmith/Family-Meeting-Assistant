@@ -6,26 +6,16 @@ public class ChatManager
     private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(100);
     private static readonly string fileName = "message-history.json";
     
-    public static async Task<ChatManager> CreateAsync(IEnumerable<IChatObserver> observers,
+    public static async Task<ChatManager> CreateAsync(
+        IEnumerable<IChatObserver> observers,
         IEnumerable<IMessageProvider> messageProviders,
-        Func<List<Tool>> toolsDel,
-        Func<GptModel> chatModelDel,
-        Func<InteractionMode> interactionModeDel,
         CancellationToken cancelToken)
     {
         var defaultValue = JsonConvert.SerializeObject(new MessageHistory());
         var fileContents = await StringIO.LoadStateAsync(defaultValue, fileName, cancelToken);
         var loadedMessages = JsonConvert.DeserializeObject<MessageHistory>(fileContents);
-        var instance = new ChatManager(loadedMessages.Messages, observers, messageProviders, toolsDel, chatModelDel, interactionModeDel); // TODO - Just pass a dependency to SettingsManager
+        var instance = new ChatManager(loadedMessages.Messages, observers, messageProviders);
         return instance;
-    }
-
-    public List<Message> ChatCompletionRequestMessages
-    {
-        get
-        {
-            return Messages;
-        }
     }
 
     public Message PinnedMessage
@@ -43,32 +33,16 @@ public class ChatManager
     public List<Message> Messages { get; private set; }
     private readonly List<IChatObserver> observers = new List<IChatObserver>();
     private readonly List<IMessageProvider> messageProviders = new ();
-    private readonly OpenAIApi openAi;
-    private CancellationTokenSource saveCts;
+    private CancellationTokenSource? saveCts;
 
     private ChatManager(
         IEnumerable<Message> initialMessages,
         IEnumerable<IChatObserver> observers,
-        IEnumerable<IMessageProvider> messageProviders,
-        Func<List<Tool>> toolsDel,
-        Func<GptModel> gptModelDel,
-        Func<InteractionMode> interactionModeDel)
+        IEnumerable<IMessageProvider> messageProviders)
     {
-        openAi = new OpenAIApi(
-            toolsDel,
-            () => Messages,
-            gptModelDel,
-            interactionModeDel);
         Messages = new List<Message>(initialMessages);
-        this.observers = new List<IChatObserver>(observers)
-        {
-            openAi
-        };
-        this.messageProviders = new List<IMessageProvider>(messageProviders)
-        {
-            openAi
-        };
-
+        this.observers = new List<IChatObserver>(observers);
+        this.messageProviders = new List<IMessageProvider>(messageProviders);
     }
 
     private async Task SaveAsync()
@@ -79,7 +53,7 @@ public class ChatManager
         }
         saveCts = new CancellationTokenSource();
 
-        var messagesToSave = Messages.Skip(1).TakeLast(400).SkipWhile(msg => msg.ToolCalls != null || msg.Role == Role.Tool).ToList();
+        var messagesToSave = Messages.Skip(1).TakeLast(350).SkipWhile(msg => msg.ToolCalls != null || msg.Role == Role.Tool).ToList();
 
         var messageHistory = new MessageHistory
         {
@@ -96,13 +70,6 @@ public class ChatManager
         observers.ForEach(obs => obs.OnNewMessages(messages));
         
         var _ = SaveAsync();
-    }
-
-    private string GetFullPromptPath(string fileName)
-    {
-        var appDataDirPath = Environment.SpecialFolder.ApplicationData.ToString();
-        string documentsPath = Path.GetFullPath(appDataDirPath);
-        return Path.Combine(documentsPath, fileName);
     }
 
     public async Task StartContinuousUpdatesAsync()

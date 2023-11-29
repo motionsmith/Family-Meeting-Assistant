@@ -61,14 +61,6 @@ public class ClientSoundDeviceSetting : SettingBase
         if (sentIntroMessage) return Task.FromResult(new Message[] { }.AsEnumerable());
 
         var content = $"The Client's Sound Device Setting value is {TypedValue}";
-        if (TypedValue == SoundDeviceTypes.Unknown)
-        {
-            content += $"\nYou inquire whether they are using headphones.";
-        }
-        if (TypedValue == SoundDeviceTypes.Headphones)
-        {
-            content += $"\nYou are concerned whether they are still wearing headphones.";
-        }
         var introMsg = new Message
         {
             Role = Role.System,

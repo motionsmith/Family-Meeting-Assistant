@@ -4,10 +4,11 @@ using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
+using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
 
-public class OpenAIApi : IMessageProvider, IChatObserver
+public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatCompleter
 {
     private readonly HttpClient httpClient = new HttpClient();
     private IConfiguration? config;
@@ -19,21 +20,31 @@ public class OpenAIApi : IMessageProvider, IChatObserver
     private Func<GptModel> gptModelSettingDelegate;
     private Func<InteractionMode> interactionModeDelegate;
 
-    public OpenAIApi(
+    public OpenAiChatCompleter(
         Func<List<Tool>> toolsDel,
         Func<List<Message>> messagesDel,
-        Func<GptModel> gptModelSettingDel,
-        Func<InteractionMode> interactionModeDel)
+        SettingsManager settingsManager)
     {
         toolsDelegate = toolsDel;
         messagesDelegate = messagesDel;
-        gptModelSettingDelegate = gptModelSettingDel;
-        interactionModeDelegate = interactionModeDel;
+        gptModelSettingDelegate = settingsManager.GetterFor<GptModelSetting, GptModel>();
+        interactionModeDelegate = settingsManager.GetterFor<InteractionModeSetting, InteractionMode>();
         config = new ConfigurationBuilder()
             .AddUserSecrets<Program>()
             .Build();
 
         httpClient.Timeout = TimeSpan.FromSeconds(15);
+    }
+
+    public void RequestChatCompletion()
+    {
+        if (completeChatCts != null && completeChatCts.IsCancellationRequested == false)
+        {
+            completeChatCts.Cancel();
+        }
+        completeChatCts = new CancellationTokenSource();
+        completeChatTask = CompleteChatAsync(messagesDelegate.Invoke(), completeChatCts.Token, null, toolsDelegate.Invoke());
+        completeChatTask.ContinueWith(HandleChatCompletion);
     }
 
     public Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
@@ -53,20 +64,7 @@ public class OpenAIApi : IMessageProvider, IChatObserver
         var followUp = messages.Any((Message m) => m.Role == Role.Tool && m.FollowUp);
         if (!wakeWordMode || WakeWordSpokenInMessages(messages) || followUp)
         {
-            if (completeChatCts != null && completeChatCts.IsCancellationRequested == false)
-            {
-                completeChatCts.Cancel();
-            }
-            completeChatCts = new CancellationTokenSource();
-            try
-            {
-                completeChatTask = CompleteChatAsync(messagesDelegate.Invoke(), completeChatCts.Token, null, toolsDelegate.Invoke());
-            }
-            catch (TaskCanceledException)
-            {
-                Console.WriteLine("[Debug] API request cancelled");
-            }
-            completeChatTask.ContinueWith(HandleChatCompletion);
+            RequestChatCompletion();
         }
 
     }
@@ -100,27 +98,19 @@ public class OpenAIApi : IMessageProvider, IChatObserver
         };
         //Console.WriteLine(requestJson);
 
-        try
+        var response = await httpClient.SendAsync(request, cancelToken);
+        if (response.IsSuccessStatusCode == false)
         {
-            var response = await httpClient.SendAsync(request, cancelToken);
-            if (response.IsSuccessStatusCode == false)
-            {
-                var failureResponseContent = await response.Content.ReadAsStringAsync();
+            var failureResponseContent = await response.Content.ReadAsStringAsync();
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"OPENAI ERROR - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
+            Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
+            Console.ResetColor();
 
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"OPENAI ERROR - {response.StatusCode} {response.ReasonPhrase} {failureResponseContent}");
-                Console.WriteLine($"REQUEST DUMP:\n\n{requestJson}");
-                Console.ResetColor();
-            }
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
-            return responseContentObject;
         }
-        catch (TaskCanceledException ex)
-        {
-            Console.WriteLine($"[Debug] {ex.Message}");
-            throw;
-        }
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var responseContentObject = JsonConvert.DeserializeObject<OpenAIApiResponse>(responseContent);
+        return responseContentObject;
     }
 
     private bool WakeWordSpokenInMessages(IEnumerable<Message> messages)
@@ -141,6 +131,7 @@ public class OpenAIApi : IMessageProvider, IChatObserver
         if (completedTask.Exception != null)
         {
             // Do something when request throws exception?
+            Console.WriteLine($"[Debug] Unhandled exception: {completedTask.Exception.Message}");
             return;
         }
         Message message;

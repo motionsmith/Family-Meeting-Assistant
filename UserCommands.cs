@@ -1,11 +1,13 @@
 using System.Diagnostics;
 using Microsoft.CognitiveServices.Speech;
 
-public static class KeyboardSpeechInterrupter
+public static class UserCommands
 {
     private static TimeSpan loopMinDuration = TimeSpan.FromMilliseconds(100);
 
-    public static Task StartKeyboardInterrupter(SpeechManager speechManager)
+    public static event Action? Spacebar;
+
+    public static Task StartReadingAsync()
     {
         return Task.Run(async () =>
         {
@@ -15,7 +17,7 @@ public static class KeyboardSpeechInterrupter
                 var key = Console.ReadKey(intercept: true); // 'intercept: true' prevents the key from being displayed
                 if (key.Key == ConsoleKey.Spacebar)
                 {
-                    speechManager.InterruptSpeaking();
+                    Spacebar?.Invoke();
                 }
 
                 stopwatch.Stop();

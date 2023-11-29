@@ -4,11 +4,7 @@ using Newtonsoft.Json.Linq;
 
 public class SmithsonianDefaultCircumstance : Circumstance
 {
-    public override List<Tool> Tools {get; } = new() {
-        ChoreManager.ListTasksTool,
-        ChoreManager.FileTaskTool,
-        ChoreManager.CompleteTaskTool
-    };
+    public override List<Tool> Tools {get; } = new ();
     public override string IntroDesc => introPrompt;
     protected override string ContextDesc => defaultContextPrompt;
     protected override string SaveString {get; set; } = string.Empty;
@@ -36,10 +32,18 @@ public class SmithsonianDefaultCircumstance : Circumstance
     private string introPrompt = ErrorPrompt;
     private string defaultContextPrompt = ErrorPrompt;
 
-    public SmithsonianDefaultCircumstance(WeatherMessageProvider owmClient, SettingsManager settingsManager)
+    public SmithsonianDefaultCircumstance(
+        WeatherMessageProvider owmClient,
+        SettingsManager settingsManager,
+        ClientTaskManager taskManager,
+        TimeMessageProvider timeMessageProvider)
     {
         Tools.Add(owmClient.GetCurrentLocalWeatherTool);
         Tools.AddRange(settingsManager.SettingsTools);
+        Tools.Add(taskManager.ListTasksTool);
+        Tools.Add(taskManager.FileTaskTool);
+        Tools.Add(taskManager.CompleteTaskTool);
+        Tools.Add(timeMessageProvider.GetTimeTool);
     }
 
     public override async Task LoadStateAsync(CancellationToken cancelToken)

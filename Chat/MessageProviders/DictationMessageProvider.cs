@@ -6,21 +6,14 @@ using Microsoft.CognitiveServices.Speech.Audio;
 public class DictationMessageProvider : IMessageProvider
 {
     private SpeechRecognizer speechRecognizer;
-    private SpeechSynthesizer speechSynthesizer;
-
-    private Task? cancelSynthTask;
+    private SpeechManager speechManager;
 
     private ConcurrentQueue<Message> messageQueue = new ConcurrentQueue<Message>();
-    private bool isSynthesizing;
 
-    public DictationMessageProvider(SpeechRecognizer speechRecognizer, SpeechSynthesizer speechSynthesizer)
+    public DictationMessageProvider(SpeechRecognizer speechRecognizer, SpeechManager speechManager)
     {
         this.speechRecognizer = speechRecognizer;
-        this.speechSynthesizer = speechSynthesizer;
-        
-        speechSynthesizer.SynthesisStarted += OnSynthStarted;
-        speechSynthesizer.SynthesisCanceled += OnSynthCancelled;
-        speechSynthesizer.SynthesisCompleted += OnSynthCompleted;
+        this.speechManager = speechManager;
         
         speechRecognizer.Recognizing += CancelSynthesis;
         
@@ -58,27 +51,11 @@ public class DictationMessageProvider : IMessageProvider
         };
     }
 
-    private void OnSynthStarted(object? sender, SpeechSynthesisEventArgs e)
-    {
-       isSynthesizing = true;
-    }
-
-    private void OnSynthCompleted(object? sender, SpeechSynthesisEventArgs e)
-    {
-        isSynthesizing = false;
-        cancelSynthTask = null;
-    }
-
-    private void OnSynthCancelled(object? sender, SpeechSynthesisEventArgs e)
-    {
-        cancelSynthTask = null;
-    }
-
     private void CancelSynthesis(object? sender, SpeechRecognitionEventArgs e)
     {
-        if (isSynthesizing && cancelSynthTask == null)
+        if (speechManager.IsSynthesizing)
         {
-            cancelSynthTask = speechSynthesizer.StopSpeakingAsync();
+            speechManager.InterruptSynthesis();
         }
     }
 

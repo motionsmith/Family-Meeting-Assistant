@@ -37,10 +37,7 @@ public class EscapeRoom : Circumstance
 
     private List<Tool> _tools = new List<Tool>{
         pressButtonTool,
-        turnDialTool,
-        ChoreManager.ListTasksTool,
-        ChoreManager.FileTaskTool,
-        ChoreManager.CompleteTaskTool
+        turnDialTool
     };
 
     private List<Tool> _buffTools = new List<Tool> {
@@ -131,10 +128,11 @@ public class EscapeRoom : Circumstance
     private string roomDescFree = ErrorPrompt;
     private string roomDescGameOver = ErrorPrompt;
 
-    public EscapeRoom()
+    public EscapeRoom(ClientTaskManager taskMgr)
     {
         pressButtonTool.Execute = PressButtonAsync;
         turnDialTool.Execute = TurnDialAsync;
+        _tools.AddRange(new Tool[] { taskMgr.ListTasksTool, taskMgr.CompleteTaskTool, taskMgr.FileTaskTool});
     }
     
     public override void OnNewMessages(IEnumerable<Message> messages, Action<int> exitCallback)

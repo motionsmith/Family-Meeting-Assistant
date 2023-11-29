@@ -1,11 +1,4 @@
-﻿using System;
-using System.Net.Http;
-using System.Numerics;
-using System.Threading.Tasks;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-public class WeatherMessageProvider : IMessageProvider
+﻿public class WeatherMessageProvider : IMessageProvider
 {
     public Tool GetCurrentLocalWeatherTool = new Tool
     {
@@ -18,13 +11,16 @@ public class WeatherMessageProvider : IMessageProvider
 
     private readonly string _apiKey;
     private readonly HttpClient _httpClient;
-    private Func<Tuple<double, double>> locationProvider; 
+    private Func<Tuple<double, double>> locationProvider;
     private DateTime lastReport = DateTime.UnixEpoch;
 
     public WeatherMessageProvider(string apiKey, Func<Tuple<double, double>> locationProvider)
     {
         _apiKey = apiKey;
-        _httpClient = new HttpClient();
+        _httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(3)
+        };
         GetCurrentLocalWeatherTool.Execute = GetCurrentLocalWeatherAsync;
         this.locationProvider = locationProvider;
     }
@@ -61,11 +57,11 @@ public class WeatherMessageProvider : IMessageProvider
             messages.Add(new Message
             {
                 Role = Role.System,
-                Content = $"### Hourly system weather update\n\n{reportContent}\nThe Client prefers fahrenheit units.\nYou remain silent \"...\" unless this update is significant."
+                Content = $"### Hourly system weather update\n\n{reportContent}\n"
             });
             lastReport = now;
         }
-        
+
         return messages.AsEnumerable();
     }
 }

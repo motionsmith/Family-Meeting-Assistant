@@ -4,6 +4,7 @@ using Microsoft.CognitiveServices.Speech;
 
 public class SpeechManager : IMessageProvider, IChatObserver
 {
+    public bool IsSynthesizing {get; private set; }
     private SpeechRecognizer speechRecognizer;
     private SpeechSynthesizer speechSynthesizer;
     private Func<SoundDeviceTypes> soundDeviceGetter;
@@ -15,6 +16,8 @@ public class SpeechManager : IMessageProvider, IChatObserver
     {
         this.speechRecognizer = speechRecognizer;
         this.speechSynthesizer = speechSynthesizer;
+        this.speechSynthesizer.SynthesisStarted += HandleSynthesisStarted;
+        this.speechSynthesizer.Synthesizing += HandleSynthesizing;
         this.speechSynthesizer.SynthesisCompleted += HandleSynthesisCompleted;
         this.soundDeviceGetter = soundDeviceGetter;
     }
@@ -26,7 +29,7 @@ public class SpeechManager : IMessageProvider, IChatObserver
         return Task.FromResult(newMessages.AsEnumerable());
     }
 
-    public void InterruptSpeaking()
+    public void InterruptSynthesis()
     {
         wasInterrupted = true;
         Console.WriteLine("Begin stop speaking");
@@ -50,6 +53,7 @@ public class SpeechManager : IMessageProvider, IChatObserver
         var soundDevice = soundDeviceGetter.Invoke();
         if (soundDevice == SoundDeviceTypes.OpenAirSpeakers)
             await speechRecognizer.StopContinuousRecognitionAsync();
+        
         var result = await speechSynthesizer.SpeakTextAsync(message.Content);
         CheckForInterruption(message);
         // DEBUG 
@@ -87,12 +91,23 @@ public class SpeechManager : IMessageProvider, IChatObserver
         }
     }
 
+    private void HandleSynthesisStarted(object? sender, SpeechSynthesisEventArgs e)
+    {
+        IsSynthesizing = true;
+    }
+
+    private void HandleSynthesizing(object? sender, SpeechSynthesisEventArgs e)
+    {
+        IsSynthesizing = true;
+    }
+
     private void HandleSynthesisCompleted(object? sender, SpeechSynthesisEventArgs e)
     {
+        IsSynthesizing = false;
         if (wasInterrupted)
         {
             // Handle interruption case
-            Console.WriteLine("[SpeechManager] Interrupted");
+            Console.WriteLine("[Debug] Interrupted");
         }
     }
 }
