@@ -1,4 +1,4 @@
-﻿// TODO Create "Reminders"--Reminders cause a System Message, which can prompt a follow-up Chat Completion.
+﻿// TODO Use ReminderService to create a similar service that can drive a story (e.g. water level is rising). 
 // TODO Break out the Pinned message, each paragraph to be controlled by a system component
 // Explore switching to Maui (no current solution for sound effects in console app)
 // TODO Add Calendar service (Ical.Net)
