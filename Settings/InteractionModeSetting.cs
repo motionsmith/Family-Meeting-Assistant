@@ -5,7 +5,7 @@ public class InteractionModeSetting : SettingBase
         Function = new ToolFunction
         {
             Name = "get_interaction_mode",
-            Description = "Gets the current interaction mode for the Assistant: Active or Passive"
+            Description = "Gets the current interaction mode for the Assistant: Converse, Listen or Ignore"
         }
     };
 
@@ -14,7 +14,7 @@ public class InteractionModeSetting : SettingBase
         Function = new ToolFunction
         {
             Name = "set_interaction_mode",
-            Description = "Sets the current interaction mode for the Assistant: Active or Passive",
+            Description = "Sets the current interaction mode for the Assistant: Converse, Listen, or Ignore ",
             Parameters = new ToolFunctionParameters
             {
                 Properties = new Dictionary<string, ToolFunctionParameterProperty> {
@@ -22,8 +22,8 @@ public class InteractionModeSetting : SettingBase
                         "value", new ToolFunctionParameterProperty
                         {
                             Type = "string",
-                            Enum = new List<string>{ "Active", "Passive" },
-                            Description = "The interaction mode for the Assistant. Determines when (in the app logic) GPT chat completions are requested."
+                            Enum = new List<string>{ "Converse", "Listen", "Ignore" },
+                            Description = "The interaction mode for the Assistant—controls how the Assistant listens and responds."
                         }
                     }
                 },
@@ -31,7 +31,7 @@ public class InteractionModeSetting : SettingBase
             }
         }
     };
-    public static SettingConfig SettingConfig { get; } = new SettingConfig("interaction-mode-setting.csv", InteractionMode.Active.ToString(), typeof(InteractionModeSetting));
+    public static SettingConfig SettingConfig { get; } = new SettingConfig("interaction-mode-setting.csv", InteractionMode.Ignore.ToString(), typeof(InteractionModeSetting));
 
     public override string SerializedValue
     {
@@ -71,6 +71,7 @@ public class InteractionModeSetting : SettingBase
 
 public enum InteractionMode
 {
-    Active,
-    Passive
+    Converse,
+    Listen,
+    Ignore
 }

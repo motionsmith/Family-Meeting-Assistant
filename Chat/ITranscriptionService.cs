@@ -1,6 +1,7 @@
 public interface ITranscriptionService
 {
-    Task StartTranscriptionAsync(bool addSystemMessage);
-    Task StopTranscriptionAsync(bool addSystemMessage);
-    bool IsTranscribing {get;}
+    event Action Recognizing;
+    
+    Task StartTranscriptionAsync(/*bool addSystemMessage*/);
+    Task StopTranscriptionAsync(/*bool addSystemMessage*/);
 }

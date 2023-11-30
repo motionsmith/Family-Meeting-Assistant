@@ -8,7 +8,7 @@ public class SpeechManager : IMessageProvider, IChatObserver
     private ITranscriptionService transcriptionService;
     private SpeechSynthesizer speechSynthesizer;
     private Func<SoundDeviceTypes> soundDeviceGetter;
-    private Func<bool> transcribeSettingGetter;
+    private Func<InteractionMode> interactionModeGetter;
 
     private bool wasInterrupted = false;
     private ConcurrentQueue<Message> newMessageQueue = new ConcurrentQueue<Message>();
@@ -21,7 +21,7 @@ public class SpeechManager : IMessageProvider, IChatObserver
         this.speechSynthesizer.Synthesizing += HandleSynthesizing;
         this.speechSynthesizer.SynthesisCompleted += HandleSynthesisCompleted;
         this.soundDeviceGetter = settingsManager.GetterFor<ClientSoundDeviceSetting, SoundDeviceTypes>();
-        this.transcribeSettingGetter = settingsManager.GetterFor<TranscribeSetting, bool>();
+        this.interactionModeGetter = settingsManager.GetterFor<InteractionModeSetting, InteractionMode>();
     }
 
     public Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
@@ -53,9 +53,10 @@ public class SpeechManager : IMessageProvider, IChatObserver
     public async Task<SpeechSynthesisResult> SpeakAsync(Message message)
     {
         var soundDevice = soundDeviceGetter.Invoke();
-        if (soundDevice == SoundDeviceTypes.OpenAirSpeakers)
+        var temporarilyStopRecognition = soundDevice == SoundDeviceTypes.OpenAirSpeakers;
+        if (temporarilyStopRecognition)
         {
-            await transcriptionService.StopTranscriptionAsync(false);
+            await transcriptionService.StopTranscriptionAsync();
         }
         var synthesisResult = await speechSynthesizer.SpeakTextAsync(message.Content);
         CheckIfInterrupted(message);
@@ -72,10 +73,9 @@ public class SpeechManager : IMessageProvider, IChatObserver
             }
         }
         
-        bool transcribe = transcribeSettingGetter.Invoke();
-        if (soundDevice == SoundDeviceTypes.OpenAirSpeakers && transcribe)
+        if (temporarilyStopRecognition)
         {
-            await transcriptionService.StartTranscriptionAsync(false);
+            await transcriptionService.StartTranscriptionAsync();
         }
         return synthesisResult;
     }

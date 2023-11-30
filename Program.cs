@@ -1,9 +1,10 @@
 ﻿// TODO Add wake word to be used when transcription is off.
+// TODO Create "Reminders"--Reminders cause a System Message, which can prompt a follow-up Chat Completion.
 // Explore switching to Maui (no current solution for sound effects in console app)
-// TODO Add Users service (JSON)
-// TODO Add Contacts service (JSON)
 // TODO Add Calendar service (Ical.Net)
 // TODO Add Hue lights service
+// TODO Add Users service (JSON)
+// TODO Add Contacts service (JSON)
 
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
@@ -23,7 +24,6 @@ class Program
     private static SpeechSynthesizer? speechSynthesizer;
     private static AudioConfig? audioConfig;
     private static SpeechManager? speechManager;
-    private static SpeechRecognizer? speechRecognizer;
     private static CloudTranscriptionService? transcriptionService;
     private static CircumstanceManager? circumstanceManager;
     private static ChatManager? chatManager;
@@ -46,13 +46,11 @@ class Program
         settingsManager = await SettingsManager.CreateInstance(new SettingConfig[] {
             ClientSoundDeviceSetting.SettingConfig,
             GptModelSetting.SettingConfig,
-            InteractionModeSetting.SettingConfig,
-            TranscribeSetting.SettingConfig
+            InteractionModeSetting.SettingConfig
         }, new CancellationTokenSource().Token);
         var soundDeviceSettingGetter = settingsManager.GetterFor<ClientSoundDeviceSetting, SoundDeviceTypes>();
         var gptModelSettingGetter = settingsManager.GetterFor<GptModelSetting, GptModel>();
         var interactionModeSettingGetter = settingsManager.GetterFor<InteractionModeSetting, InteractionMode>();
-        var transcribeSettingGetter = settingsManager.GetterFor<TranscribeSetting, bool>();
 
         // MS Speech Service Config
         speechConfig = SpeechConfig.FromSubscription(config["SPEECH_KEY"], config["SPEECH_REGION"]);
@@ -61,17 +59,16 @@ class Program
         audioConfig = AudioConfig.FromDefaultMicrophoneInput();
 
         // Transcription
-        speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
-        transcriptionService = new CloudTranscriptionService(speechRecognizer, settingsManager);
+        transcriptionService = new CloudTranscriptionService(speechConfig, audioConfig, settingsManager);
         AppDomain.CurrentDomain.ProcessExit += async (s, e) =>
         {
-            await transcriptionService.StopTranscriptionAsync(false);
+            await transcriptionService.StopTranscriptionAsync();
         };
 
         // Speech
         speechSynthesizer = new SpeechSynthesizer(speechConfig);
         speechManager = new SpeechManager(transcriptionService, speechSynthesizer, settingsManager);
-        speechRecognizer.Recognizing += (s, e) =>
+        transcriptionService.Recognizing += () =>
         {
             if (speechManager.IsSynthesizing)
             {
@@ -133,23 +130,9 @@ class Program
                 return;
             chatCompleter.RequestChatCompletion();
         };
-        UserCommands.ToggleTranscription += () =>
-        {
-            bool transcribeSetting = transcribeSettingGetter.Invoke();
-
-            Console.WriteLine($"[Debug] Toggling transcription to {!transcribeSetting}");
-            if (transcribeSetting)
-            {
-                transcriptionService.StopTranscriptionAsync(true);
-            }
-            else
-            {
-                transcriptionService.StartTranscriptionAsync(true);
-            }
-        };
 
         Console.WriteLine("Speak into your microphone.");
-        transcriptionService.StartTranscriptionAsync(false);
+        transcriptionService.StartTranscriptionAsync();
 
         var longTasks = new List<Task> {
             chatManager.StartContinuousUpdatesAsync(),

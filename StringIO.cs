@@ -17,7 +17,7 @@
         await File.WriteAllTextAsync(filePath, state, cancelToken);
     }
 
-    private static string GetFilePath(string fileName)
+    public static string GetFilePath(string fileName)
     {
         var appDataDirPath = Environment.SpecialFolder.ApplicationData.ToString();
         string appDataFullPath = Path.GetFullPath(appDataDirPath);

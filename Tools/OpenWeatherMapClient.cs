@@ -28,7 +28,7 @@
     public async Task<string> GetWeatherAsync(CancellationToken cancelToken)
     {
         var location = locationProvider.Invoke();
-        string url = $"https://api.openweathermap.org/data/2.5/weather?lat={location.Item1}&lon={location.Item2}&appid={_apiKey}";
+        string url = $"https://api.openweathermap.org/data/2.5/weather?lat={location.Item1}&lon={location.Item2}&appid={_apiKey}&units=imperial";
         var response = await _httpClient.GetAsync(url, cancelToken);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync(cancelToken);

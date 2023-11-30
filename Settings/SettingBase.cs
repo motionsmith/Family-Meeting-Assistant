@@ -32,7 +32,7 @@ public abstract class SettingBase : ISetting
     public async Task<Message> UpdateValueAsync(ToolCall tc, CancellationToken tkn)
     {
         var args = JObject.Parse(tc.Function.Arguments);
-        Value = (bool)args["value"];
+        SerializedValue = (string)args["value"];
         return new Message
         {
             Content = $"The Setting \"{GetType().Name}\" has been changed to {Value}. Quickly confirm.",
