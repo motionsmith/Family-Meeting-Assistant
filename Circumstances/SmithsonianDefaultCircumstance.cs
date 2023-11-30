@@ -35,7 +35,8 @@ public class SmithsonianDefaultCircumstance : Circumstance
     public SmithsonianDefaultCircumstance(
         WeatherMessageProvider owmClient,
         SettingsManager settingsManager,
-        ClientTaskManager taskManager,
+        ClientTaskService taskManager,
+        ReminderService reminderService,
         TimeMessageProvider timeMessageProvider)
     {
         Tools.Add(owmClient.GetCurrentLocalWeatherTool);
@@ -44,6 +45,9 @@ public class SmithsonianDefaultCircumstance : Circumstance
         Tools.Add(taskManager.FileTaskTool);
         Tools.Add(taskManager.CompleteTaskTool);
         Tools.Add(timeMessageProvider.GetTimeTool);
+        Tools.Add(reminderService.CreateReminderTool);
+        Tools.Add(reminderService.ListRemindersTool);
+        Tools.Add(reminderService.CancelReminderTool);
     }
 
     public override async Task LoadStateAsync(CancellationToken cancelToken)

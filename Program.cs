@@ -1,5 +1,5 @@
-﻿// TODO Add wake word to be used when transcription is off.
-// TODO Create "Reminders"--Reminders cause a System Message, which can prompt a follow-up Chat Completion.
+﻿// TODO Create "Reminders"--Reminders cause a System Message, which can prompt a follow-up Chat Completion.
+// TODO Break out the Pinned message, each paragraph to be controlled by a system component
 // Explore switching to Maui (no current solution for sound effects in console app)
 // TODO Add Calendar service (Ical.Net)
 // TODO Add Hue lights service
@@ -18,7 +18,8 @@ class Program
     private static readonly TimeMessageProvider timeMessageProvider = new TimeMessageProvider();
     private static IConfiguration? config;
     private static WeatherMessageProvider? weatherMessageProvider;
-    private static ClientTaskManager? taskManager;
+    private static ClientTaskService? clientTaskService;
+    private static ReminderService? reminderService;
     private static SettingsManager? settingsManager;
     private static SpeechConfig? speechConfig;
     private static SpeechSynthesizer? speechSynthesizer;
@@ -40,7 +41,10 @@ class Program
         weatherMessageProvider = new WeatherMessageProvider(config["OWM_KEY"], () => new(Lat, Long));
 
         // Task list
-        taskManager = await ClientTaskManager.CreateAsync(new CancellationTokenSource().Token);
+        clientTaskService = await ClientTaskService.CreateAsync(new CancellationTokenSource().Token);
+
+        // Reminders
+        reminderService = await ReminderService.CreateAsync(new CancellationTokenSource().Token);
 
         // Settings
         settingsManager = await SettingsManager.CreateInstance(new SettingConfig[] {
@@ -81,7 +85,8 @@ class Program
             new SmithsonianDefaultCircumstance(
                 weatherMessageProvider,
                 settingsManager,
-                taskManager,
+                clientTaskService,
+                reminderService,
                 timeMessageProvider)
         },
         (msg) => { chatManager.PinnedMessage = msg; },
@@ -107,7 +112,8 @@ class Program
                 timeMessageProvider,
                 settingsManager,
                 speechManager,
-                taskManager,
+                clientTaskService,
+                reminderService,
                 chatCompleter
             },
             new CancellationTokenSource().Token);

@@ -128,7 +128,7 @@ public class EscapeRoom : Circumstance
     private string roomDescFree = ErrorPrompt;
     private string roomDescGameOver = ErrorPrompt;
 
-    public EscapeRoom(ClientTaskManager taskMgr)
+    public EscapeRoom(ClientTaskService taskMgr)
     {
         pressButtonTool.Execute = PressButtonAsync;
         turnDialTool.Execute = TurnDialAsync;

@@ -2,13 +2,13 @@ using System;
 using System.ComponentModel;
 using Newtonsoft.Json.Linq;
 
-public class ClientTaskManager : IMessageProvider
+public class ClientTaskService : IMessageProvider
 {
     private static readonly string fileName = "tasks.csv";
-    public static async Task<ClientTaskManager> CreateAsync(CancellationToken cancelToken)
+    public static async Task<ClientTaskService> CreateAsync(CancellationToken cancelToken)
     {
         var fileContents = await StringIO.LoadStateAsync("Win the game!,null", fileName, cancelToken);
-        var instance = new ClientTaskManager(fileContents);
+        var instance = new ClientTaskService(fileContents);
         return instance;
     }
     
@@ -84,7 +84,7 @@ public class ClientTaskManager : IMessageProvider
     private readonly List<ClientTask> clientTasks = new List<ClientTask>();
     private bool sentIntroMessage = false;
 
-    private ClientTaskManager(string fileContents)
+    private ClientTaskService(string fileContents)
     {
         FileTaskTool.Execute = File;
         ListTasksTool.Execute = List;
