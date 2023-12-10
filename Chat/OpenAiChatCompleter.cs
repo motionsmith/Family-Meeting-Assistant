@@ -1,15 +1,15 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
-using Newtonsoft.Json.Linq;
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
-using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
 
 public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatCompleter
 {
+    public event Action ChatCompletionRequested;
+
     private readonly HttpClient httpClient = new HttpClient();
     private IConfiguration? config;
     private ConcurrentQueue<Message> messageQueue = new();
@@ -46,6 +46,7 @@ public class OpenAiChatCompleter : IMessageProvider, IChatObserver, IChatComplet
         }
         completeChatCts = new CancellationTokenSource();
         completeChatTask = CompleteChatAsync(messagesDelegate.Invoke(), completeChatCts.Token, null, toolsDelegate.Invoke());
+        ChatCompletionRequested?.Invoke();
         completeChatTask.ContinueWith(HandleChatCompletion);
     }
 
@@ -280,6 +281,9 @@ public class Message
 
     [JsonIgnore]
     public bool FollowUp { get; set; }
+
+    [JsonIgnore]
+    public string MessageSound { get; set; }
 }
 
 [JsonConverter(typeof(StringEnumConverter))]

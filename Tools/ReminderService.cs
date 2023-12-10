@@ -165,7 +165,8 @@ public class ReminderService : IMessageProvider
             Content = prompt,
             Role = Role.Tool,
             ToolCallId = toolCall.Id,
-            FollowUp = true
+            FollowUp = true,
+            MessageSound = "pleasant_ting.wav"
         };
 
 

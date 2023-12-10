@@ -1,7 +1,10 @@
 public interface ITranscriptionService
 {
     event Action Recognizing;
+    event Action Recognized;
+    event Action SessionStarted;
+    event Action SessionStopped;
     
-    Task StartTranscriptionAsync(/*bool addSystemMessage*/);
-    Task StopTranscriptionAsync(/*bool addSystemMessage*/);
+    Task StartTranscriptionAsync();
+    Task StopTranscriptionAsync();
 }

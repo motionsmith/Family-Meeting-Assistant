@@ -1,6 +1,9 @@
-﻿// TODO Use ReminderService to create a similar service that can drive a story (e.g. water level is rising). 
+﻿// Make a message capable of not triggering a completion response even in Converse mode.
 // TODO Break out the Pinned message, each paragraph to be controlled by a system component
-// Explore switching to Maui (no current solution for sound effects in console app)
+// - Ability for assistant to modify their own prompt. (requires retreival)
+// - Ability for assistant to choose from a set of personalities 
+// - Allows for tools to own their pinned prompt instructions
+// TODO Use ReminderService to create a similar service that can drive a story (e.g. water level is rising). 
 // TODO Add Calendar service (Ical.Net)
 // TODO Add Hue lights service
 // TODO Add Users service (JSON)
@@ -15,6 +18,7 @@ class Program
     private static readonly double Lat = 47.5534058;
     private static readonly double Long = -122.3093843;
     private static readonly ConsoleChatObserver consoleChatObserver = new ConsoleChatObserver();
+    private static SoundController? soundChatObserver;
     private static readonly TimeMessageProvider timeMessageProvider = new TimeMessageProvider();
     private static IConfiguration? config;
     private static WeatherMessageProvider? weatherMessageProvider;
@@ -52,9 +56,6 @@ class Program
             GptModelSetting.SettingConfig,
             InteractionModeSetting.SettingConfig
         }, new CancellationTokenSource().Token);
-        var soundDeviceSettingGetter = settingsManager.GetterFor<ClientSoundDeviceSetting, SoundDeviceTypes>();
-        var gptModelSettingGetter = settingsManager.GetterFor<GptModelSetting, GptModel>();
-        var interactionModeSettingGetter = settingsManager.GetterFor<InteractionModeSetting, InteractionMode>();
 
         // MS Speech Service Config
         speechConfig = SpeechConfig.FromSubscription(config["SPEECH_KEY"], config["SPEECH_REGION"]);
@@ -98,11 +99,15 @@ class Program
             messagesDel: () => chatManager.Messages,
             settingsManager);
 
+        // Sound Controller
+        soundChatObserver = new SoundController(speechSynthesizer, transcriptionService, chatCompleter);
+
         // Chat management
         chatManager = await ChatManager.CreateAsync(
             new List<IChatObserver>() {
                 speechManager,
                 consoleChatObserver,
+                soundChatObserver,
                 circumstanceManager,
                 chatCompleter
             },

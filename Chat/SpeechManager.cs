@@ -40,7 +40,10 @@ public class SpeechManager : IMessageProvider, IChatObserver
 
     public void OnNewMessages(IEnumerable<Message> messages)
     {
-        messages = messages.Where(m => m.Role == Role.Assistant && string.IsNullOrEmpty(m.Content) == false);
+        messages = messages.Where(m => 
+            m.Role == Role.Assistant && 
+            string.IsNullOrEmpty(m.Content) == false &&
+            m.Content != "...");
         var speakTask = Task.Run(async () =>
         {
             foreach (var message in messages)

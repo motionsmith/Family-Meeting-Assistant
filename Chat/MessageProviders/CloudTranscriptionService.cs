@@ -12,6 +12,9 @@ public class CloudTranscriptionService : IMessageProvider, ITranscriptionService
     }
 
     public event Action Recognizing;
+    public event Action Recognized;
+    public event Action SessionStarted;
+    public event Action SessionStopped;
 
     private SpeechRecognizer speechRecognizerContinuous;
     private SpeechRecognizer speechRecognizerKeyword;
@@ -113,6 +116,7 @@ public class CloudTranscriptionService : IMessageProvider, ITranscriptionService
                 Role = Role.User
             };
             messageQueue.Enqueue(recognitionMessage);
+            Recognized?.Invoke();
         }
         else if (e.Result.Reason == ResultReason.NoMatch)
         {
@@ -135,11 +139,13 @@ public class CloudTranscriptionService : IMessageProvider, ITranscriptionService
     private void OnSpeechSessionStarted(object? sender, SessionEventArgs e)
     {
         Console.WriteLine("Session Started");
+        SessionStarted?.Invoke();
         
     }
 
     private void OnSpeechSessionStopped(object? sender, SessionEventArgs e)
     {
         Console.WriteLine("Session Stopped");
+        SessionStopped?.Invoke();
     }
 }
