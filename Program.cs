@@ -20,6 +20,7 @@ class Program
     private static readonly ConsoleChatObserver consoleChatObserver = new ConsoleChatObserver();
     private static SoundController? soundChatObserver;
     private static readonly TimeMessageProvider timeMessageProvider = new TimeMessageProvider();
+    private static NewsMessageProvider? newsMessageProvider;
     private static IConfiguration? config;
     private static WeatherMessageProvider? weatherMessageProvider;
     private static ClientTaskService? clientTaskService;
@@ -43,6 +44,8 @@ class Program
 
         // Weather
         weatherMessageProvider = new WeatherMessageProvider(config["OWM_KEY"], () => new(Lat, Long));
+        // News Headlines
+        newsMessageProvider = new NewsMessageProvider(config["NEWSAPI_API_KEY"]);
 
         // Task list
         clientTaskService = await ClientTaskService.CreateAsync(new CancellationTokenSource().Token);
@@ -85,6 +88,7 @@ class Program
         circumstanceManager = await CircumstanceManager.CreateAsync(new Circumstance[] {
             new SmithsonianDefaultCircumstance(
                 weatherMessageProvider,
+                newsMessageProvider,
                 settingsManager,
                 clientTaskService,
                 reminderService,
@@ -115,6 +119,7 @@ class Program
                 transcriptionService,
                 weatherMessageProvider,
                 timeMessageProvider,
+                newsMessageProvider,
                 settingsManager,
                 speechManager,
                 clientTaskService,
@@ -142,16 +147,24 @@ class Program
             chatCompleter.RequestChatCompletion();
         };
 
-        Console.WriteLine("Speak into your microphone.");
+        Console.WriteLine("Speak into your microphone or type your message and press Enter:");
+        // Start audio transcription (if available)
         transcriptionService.StartTranscriptionAsync();
 
-        var longTasks = new List<Task> {
+        // Run continuous update loop and text input loop indefinitely
+        await Task.WhenAll(
             chatManager.StartContinuousUpdatesAsync(),
-            UserCommands.StartReadingAsync()
-        };
-
-        var allLongTasks = Task.WhenAny(longTasks);
-        await allLongTasks;
+            Task.Run(async () =>
+            {
+                while (true)
+                {
+                    var input = Console.ReadLine();
+                    if (string.IsNullOrWhiteSpace(input))
+                        continue;
+                    chatManager.AddUserMessage(input);
+                }
+            })
+        );
 
         Console.WriteLine("Goodbye");
         await Task.Delay(5000);

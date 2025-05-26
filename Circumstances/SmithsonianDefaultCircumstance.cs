@@ -34,12 +34,14 @@ public class SmithsonianDefaultCircumstance : Circumstance
 
     public SmithsonianDefaultCircumstance(
         WeatherMessageProvider owmClient,
+        NewsMessageProvider newsClient,
         SettingsManager settingsManager,
         ClientTaskService taskManager,
         ReminderService reminderService,
         TimeMessageProvider timeMessageProvider)
     {
         Tools.Add(owmClient.GetCurrentLocalWeatherTool);
+        Tools.Add(newsClient.GetTopHeadlinesTool);
         Tools.AddRange(settingsManager.SettingsTools);
         Tools.Add(taskManager.ListTasksTool);
         Tools.Add(taskManager.FileTaskTool);

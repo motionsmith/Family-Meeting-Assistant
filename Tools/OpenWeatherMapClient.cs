@@ -36,33 +36,72 @@
 
     public async Task<Message> GetCurrentLocalWeatherAsync(ToolCall toolCall, CancellationToken cancelToken)
     {
-        var responseBody = await GetWeatherAsync(cancelToken);
-        return new Message {
-            Content = $"### Weather update on demand:\n\n{responseBody}\nThe Client prefers fahrenheit units. You follow up.",
-            Role = Role.Tool,
-            ToolCallId = toolCall.Id,
-            FollowUp = true
-        };
+        // Handle missing API key
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            return new Message
+            {
+                Content = "Weather API key not configured; cannot fetch weather.",
+                Role = Role.Tool,
+                ToolCallId = toolCall.Id,
+                FollowUp = false
+            };
+        }
+        try
+        {
+            var responseBody = await GetWeatherAsync(cancelToken);
+            return new Message
+            {
+                Content = $"### Weather update on demand:\n\n{responseBody}\nThe Client prefers fahrenheit units. You follow up.",
+                Role = Role.Tool,
+                ToolCallId = toolCall.Id,
+                FollowUp = true
+            };
+        }
+        catch (Exception ex)
+        {
+            return new Message
+            {
+                Content = $"[Weather] failed on-demand update: {ex.Message}",
+                Role = Role.Tool,
+                ToolCallId = toolCall.Id,
+                FollowUp = false
+            };
+        }
     }
 
     public async Task<IEnumerable<Message>> GetNewMessagesAsync(CancellationTokenSource cts)
     {
         var messages = new List<Message>();
+        // Skip periodic updates if no API key configured
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            return messages;
+        }
         var now = DateTime.Now;
         var duration = now - lastReport;
         var thres = TimeSpan.FromMinutes(60);
         if (duration > thres)
         {
-            var reportContent = await GetWeatherAsync(cts.Token);
-            messages.Add(new Message
+            try
             {
-                Role = Role.System,
-                Content = $"### Hourly system weather update\n\n{reportContent}\n"
-            });
-            lastReport = now;
+                var reportContent = await GetWeatherAsync(cts.Token);
+                messages.Add(new Message
+                {
+                    Role = Role.System,
+                    Content = $"### Hourly system weather update\n\n{reportContent}\n"
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Weather] periodic update failed: {ex.Message}");
+            }
+            finally
+            {
+                lastReport = now;
+            }
         }
-
-        return messages.AsEnumerable();
+        return messages;
     }
 }
 

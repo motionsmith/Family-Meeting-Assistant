@@ -5,7 +5,7 @@ AI-powered, voice-driven .NET console assistant combining Azure Cognitive Servic
 Key Features
 - Speech-to-text & text-to-speech via Azure Cognitive Services
 - Conversational AI powered by GPT-3.5 & GPT-4 with function calling
-- Extensible toolset: weather, time, reminders, tasks, account management, interactive games, museum guide
+- Extensible toolset: weather, headlines, time, reminders, tasks, account management, interactive games, museum guide
 - Modular contexts (“Circumstances”) for scenario-driven dialogue
 - Wake-word activation, interrupt control, continuous listening
 
@@ -14,6 +14,7 @@ Prerequisites
 - Azure Speech Services: SPEECH_KEY, SPEECH_REGION
 - OpenAI API: OPENAI_KEY, (optional) OPENAI_ORG
 - OpenWeatherMap API: OWM_KEY
+- NewsAPI API: NEWSAPI_API_KEY
 
 Configuration
 In the project directory, set user secrets:
@@ -23,6 +24,7 @@ dotnet user-secrets set SPEECH_REGION <your-region>
 dotnet user-secrets set OPENAI_KEY <your-key>
 dotnet user-secrets set OPENAI_ORG <your-org-id>  # optional
 dotnet user-secrets set OWM_KEY <your-key>
+dotnet user-secrets set NEWSAPI_API_KEY <your-key>
 ```
 
 Build & Run

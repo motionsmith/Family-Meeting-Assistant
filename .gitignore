@@ -406,3 +406,4 @@ ASALocalRun/
 
 # Specific to this project
 ApplicationData/
+.env

@@ -71,6 +71,21 @@ public class ChatManager
         
         var _ = SaveAsync();
     }
+    /// <summary>
+    /// Adds a user-originated message to the conversation and notifies observers.
+    /// </summary>
+    /// <param name="content">The text content of the user message.</param>
+    public void AddUserMessage(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return;
+        var message = new Message
+        {
+            Role = Role.User,
+            Content = content,
+            FollowUp = true
+        };
+        AddMessages(new[] { message });
+    }
 
     public async Task StartContinuousUpdatesAsync()
     {
@@ -91,6 +106,11 @@ public class ChatManager
             catch (TaskCanceledException)
             {
                 Console.WriteLine($"Loop cancelled. Enforcing 1s loop delay");
+                await Task.Delay(1000);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in update loop: {ex.Message}");
                 await Task.Delay(1000);
             }
         }
